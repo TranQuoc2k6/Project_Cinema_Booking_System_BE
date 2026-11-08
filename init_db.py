@@ -10,6 +10,7 @@ from app.models import Role, Movie, Genre
 def create_tables_and_seed_data():
     print("--> Dang khoi tao cac bang...")
     Base.metadata.create_all(bind=engine)
+    print("--> Tạo bảng thành công! Đang tiến hành nạp dữ liệu mẫu...")
 
     db = SessionLocal()
 
