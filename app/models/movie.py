@@ -22,3 +22,5 @@ class Movie(Base):
         secondary=movie_genres,
         back_populates="movies"
     )
+    
+    showtimes = relationship("Showtime", back_populates="movie")
