@@ -1,49 +1,26 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers.movies import router as movie_router
+from app.routers import movies, auth
 
-app = FastAPI()
-app.include_router(movie_router)
+app = FastAPI(
+    title="Cinema Booking System API",
+    version="1.0.0"
+)
 
+# Cấu hình CORS cho Frontend kết nối
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # Hoặc cấu hình domain cụ thể của FE, ví dụ: ["http://localhost:3000", "http://127.0.0.1:5500"]
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-movies = [
-    {"id": 1, "title": "Mai", "duration": 131},
-    {"id": 2, "title": "Lat Mat 7", "duration": 138}
-]
+# Đăng ký các router vào hệ thống
+app.include_router(movies.router)
+app.include_router(auth.router)
+# app.include_router(showtimes.router)
 
-@app.get("/")
+@app.get("/", tags=["Root"])
 def home():
     return {"message": "Cinema Booking API is running"}
-
-@app.get("/api/movies")
-def get_movies():
-    return movies
-
-@app.post("/api/movies")
-def create_movie(movie: dict):
-    movie["id"] = len(movies) + 1
-    movies.append(movie)
-    return movie
-
-@app.put("/api/movies/{movie_id}")
-def update_movie(movie_id: int, updated_movie: dict):
-    for movie in movies:
-        if movie["id"] == movie_id:
-            movie.update(updated_movie)
-            return movie
-    return {"message": "Movie not found"}
-
-@app.delete("/api/movies/{movie_id}")
-def delete_movie(movie_id: int):
-    for movie in movies:
-        if movie["id"] == movie_id:
-            movies.remove(movie)
-            return {"message": "Deleted successfully"}
-    return {"message": "Movie not found"}
