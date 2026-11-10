@@ -1,8 +1,7 @@
 from database import Base
 from app.models.role import Role
 from app.models.user import User
-from app.models.genre import Genre
-from app.models.movie_genre import movie_genres
+from app.models.genre import Genre, movie_genres
 from app.models.movie import Movie
 from app.models.cinema import Cinema
 from app.models.room import Room
