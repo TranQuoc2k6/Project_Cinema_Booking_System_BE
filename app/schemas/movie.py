@@ -41,3 +41,23 @@ class MovieResponse(BaseModel):
     genres: List[GenreResponse] = []
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class MovieItemResponse(BaseModel):
+    id: int
+    title: str
+    slug: str
+    description: Optional[str] = None
+    duration_minutes: int
+    release_date: date
+    poster_url: Optional[str] = None
+    trailer_url: Optional[str] = None
+    status: str
+
+
+class MovieListResponse(BaseModel):
+    items: List[MovieItemResponse]
+    page: int
+    limit: int
+    total: int
+    total_pages: int

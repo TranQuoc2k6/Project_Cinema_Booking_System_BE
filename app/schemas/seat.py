@@ -1,6 +1,6 @@
 from enum import Enum
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class SeatType(str, Enum):
@@ -35,3 +35,26 @@ class SeatResponse(SeatBase):
     id: int
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class SeatMapGenerateRequest(BaseModel):
+    rows: int = Field(..., ge=1, le=2000)
+    columns: int = Field(..., ge=1, le=2000)
+    vip_rows: int = Field(0, ge=0, le=2000)
+    couple_rows: int = Field(0, ge=0, le=2000)
+
+    @model_validator(mode="after")
+    def validate_layout(self) -> "SeatMapGenerateRequest":
+        if self.vip_rows + self.couple_rows > self.rows:
+            raise ValueError("Số hàng VIP và ghế đôi không được vượt quá tổng số hàng")
+        if self.rows * self.columns > 2000:
+            raise ValueError("Sơ đồ không được vượt quá 2000 ghế")
+        return self
+
+
+class SeatMapGenerationResponse(BaseModel):
+    room_id: int
+    rows: int
+    columns: int
+    total_seats: int
+    seats: list[SeatResponse]

@@ -59,3 +59,15 @@ python init_db.py
 uvicorn main:app --reload --port 8000
 ```
 Tài liệu Swagger UI tự động: `http://localhost:8000/docs`
+
+### Tạo sơ đồ ghế cho phòng chiếu
+Gửi `POST /api/rooms/{room_id}/seats/generate` với số hàng/cột và số hàng VIP/ghế đôi ở cuối sơ đồ:
+```json
+{
+  "rows": 8,
+  "columns": 12,
+  "vip_rows": 2,
+  "couple_rows": 1
+}
+```
+Các hàng thường nằm phía trước, tiếp theo là hàng VIP, cuối cùng là hàng ghế đôi. Mỗi cột trong hàng đôi vẫn được tạo thành một ghế `couple`. Sơ đồ có giới hạn 2.000 ghế; API không ghi đè phòng đã có ghế và đồng thời cập nhật `total_seats` của phòng.
