@@ -18,4 +18,4 @@ class Showtime(Base):
     room = relationship("Room", back_populates="showtimes")
 
     # Quan hệ 1-N với Booking
-    # bookings = relationship("Booking", back_populates="showtime", cascade="all, delete-orphan")
+    bookings = relationship("Booking", back_populates="showtime", cascade="all, delete-orphan")
