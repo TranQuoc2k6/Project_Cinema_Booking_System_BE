@@ -14,11 +14,17 @@ class Movie(Base):
     release_date = Column(Date, nullable=False)
     poster = Column(String(255), nullable=True)
     trailer = Column(String(255), nullable=True)
-    age_rating = Column(String(10), nullable=False)
+    age_rating = Column(String(10), nullable=False, default="P")
     status = Column(String(50), nullable=False, default="COMING_SOON")
 
     genres = relationship(
         "Genre",
         secondary=movie_genres,
         back_populates="movies"
+    )
+
+    showtimes = relationship(
+        "Showtime",
+        back_populates="movie",
+        cascade="all, delete-orphan"
     )
