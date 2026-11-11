@@ -1,16 +1,17 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import movies, auth, seats, showtimes
+from app.routers import movies, auth, admin, seats, showtimes, cinemas, rooms
 
 app = FastAPI(
     title="Cinema Booking System API",
+    description="Hệ thống Backend Đặt vé xem phim trực tuyến - Tích hợp Admin Portal & Security",
     version="1.0.0"
 )
 
 # Cấu hình CORS cho Frontend kết nối
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Hoặc cấu hình domain cụ thể của FE, ví dụ: ["http://localhost:3000", "http://127.0.0.1:5500"]
+    allow_origins=["*"],  # Cho phép mọi origin của FE
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -19,9 +20,17 @@ app.add_middleware(
 # Đăng ký các router vào hệ thống
 app.include_router(movies.router)
 app.include_router(auth.router)
+app.include_router(auth.router, prefix="/api/auth", include_in_schema=False)  # Alias tương thích
+app.include_router(admin.router, prefix="/api/admin", tags=["Admin Portal"])
 app.include_router(seats.router)
 app.include_router(showtimes.router)
+app.include_router(cinemas.router)
+app.include_router(rooms.router)
 
 @app.get("/", tags=["Root"])
 def home():
-    return {"message": "Cinema Booking API is running"}
+    return {
+        "message": "Cinema Booking API is running successfully",
+        "version": "1.0.0",
+        "docs_url": "/docs"
+    }

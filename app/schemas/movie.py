@@ -6,58 +6,68 @@ from app.schemas.genre import GenreResponse
 
 class MovieCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=255)
+    slug: Optional[str] = None
     description: Optional[str] = None
-    duration: int = Field(..., gt=0)
-    release_date: date
+    duration: Optional[int] = None
+    duration_minutes: Optional[int] = 120
+    release_date: Optional[date] = None
     poster: Optional[str] = None
+    poster_url: Optional[str] = None
     trailer: Optional[str] = None
-    age_rating: str = Field(..., max_length=10)
-    status: str = "COMING_SOON"
+    trailer_url: Optional[str] = None
+    age_rating: Optional[str] = "P"
+    status: Optional[str] = "NOW_SHOWING"
     genre_ids: List[int] = []
 
 
 class MovieUpdate(BaseModel):
     title: Optional[str] = None
+    slug: Optional[str] = None
     description: Optional[str] = None
-    duration: Optional[int] = Field(None, gt=0)
+    duration: Optional[int] = None
+    duration_minutes: Optional[int] = None
     release_date: Optional[date] = None
     poster: Optional[str] = None
+    poster_url: Optional[str] = None
     trailer: Optional[str] = None
+    trailer_url: Optional[str] = None
     age_rating: Optional[str] = None
     status: Optional[str] = None
     genre_ids: Optional[List[int]] = None
+
+
+class MovieItemResponse(BaseModel):
+    id: int
+    title: str
+    slug: Optional[str] = None
+    description: Optional[str] = None
+    duration_minutes: Optional[int] = None
+    release_date: Optional[date] = None
+    poster_url: Optional[str] = None
+    trailer_url: Optional[str] = None
+    status: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class MovieListResponse(BaseModel):
+    items: List[MovieItemResponse] = []
+    page: int = 1
+    limit: int = 10
+    total: int = 0
+    total_pages: int = 1
 
 
 class MovieResponse(BaseModel):
     id: int
     title: str
     description: Optional[str] = None
-    duration: int
-    release_date: date
+    duration: Optional[int] = 120
+    release_date: Optional[date] = None
     poster: Optional[str] = None
     trailer: Optional[str] = None
-    age_rating: str
-    status: str
+    age_rating: Optional[str] = "P"
+    status: Optional[str] = "NOW_SHOWING"
     genres: List[GenreResponse] = []
 
     model_config = ConfigDict(from_attributes=True)
-
-
-class MovieItemResponse(BaseModel):
-    id: int
-    title: str
-    slug: str
-    description: Optional[str] = None
-    duration_minutes: int
-    release_date: date
-    poster_url: Optional[str] = None
-    trailer_url: Optional[str] = None
-    status: str
-
-
-class MovieListResponse(BaseModel):
-    items: List[MovieItemResponse]
-    page: int
-    limit: int
-    total: int
-    total_pages: int
