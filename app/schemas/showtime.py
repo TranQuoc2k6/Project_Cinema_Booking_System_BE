@@ -1,5 +1,6 @@
 from datetime import datetime
 from decimal import Decimal
+from enum import Enum
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -46,3 +47,37 @@ class ShowtimeResponse(ShowtimeBase):
     id: int
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ---------------------------------------------------------------------------
+# Seat-map response schemas  (dùng cho GET /showtimes/{id}/seats)
+# ---------------------------------------------------------------------------
+
+class SeatStatus(str, Enum):
+    AVAILABLE = "available"
+    HELD = "held"        # PENDING booking
+    BOOKED = "booked"    # CONFIRMED booking
+
+
+class SeatStatusItem(BaseModel):
+    """Thông tin một ghế trong sơ đồ suất chiếu."""
+    id: int
+    seat_number: str
+    seat_row: str
+    seat_column: int
+    seat_type: str                  # standard | vip | couple
+    status: SeatStatus
+    price: Decimal = Field(..., ge=0, max_digits=10, decimal_places=2)
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ShowtimeSeatMapResponse(BaseModel):
+    """Toàn bộ sơ đồ ghế của một suất chiếu."""
+    showtime_id: int
+    room_id: int
+    base_price: Decimal = Field(..., ge=0, max_digits=10, decimal_places=2)
+    total_seats: int
+    available_seats: int
+    # Ghế được nhóm theo hàng (key: tên hàng A, B, C...)
+    rows: dict[str, list[SeatStatusItem]]
