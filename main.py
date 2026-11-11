@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import movies, auth, admin, seats
+from app.routers import movies, auth, admin, seats, showtimes
 
 app = FastAPI(
     title="Cinema Booking System API",
@@ -23,7 +23,7 @@ app.include_router(auth.router)
 app.include_router(auth.router, prefix="/api/auth", include_in_schema=False)  # Alias tương thích
 app.include_router(admin.router, prefix="/api/admin", tags=["Admin Portal"])
 app.include_router(seats.router)
-# app.include_router(showtimes.router)
+app.include_router(showtimes.router)
 
 @app.get("/", tags=["Root"])
 def home():
