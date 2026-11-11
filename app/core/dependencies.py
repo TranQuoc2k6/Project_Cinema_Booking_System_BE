@@ -1,99 +1,94 @@
+"""
+Dependency xác thực & phân quyền dùng chung cho toàn bộ API.
+
+Cách dùng ở router:
+    from app.core.dependencies import get_current_user, require_admin
+
+    @router.get("/me")
+    def me(current_user: User = Depends(get_current_user)): ...
+
+    @router.post("/movies", dependencies=[Depends(require_admin)])
+    def create_movie(...): ...
+
+Mã lỗi:
+    401 -> thiếu token / token sai / token hết hạn / user không còn tồn tại
+    403 -> token hợp lệ nhưng tài khoản bị khóa hoặc không đủ quyền
+"""
 from typing import Optional
+
 from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jose import JWTError, jwt      # type: ignore[reportMissingModuleSource]
+from jose.exceptions import ExpiredSignatureError           # type: ignore[reportMissingModuleSource]
 from sqlalchemy.orm import Session
 
-from database import get_db
-from app.core.security import decode_access_token
+from app.core.config import settings
 from app.models.user import User
+from database import get_db
 
-# Khai báo schema xác thực HTTP Bearer token
-security_bearer = HTTPBearer(auto_error=False)
+ADMIN_ROLE_NAME = "ADMIN"
+
+# Swagger: bấm "Authorize" rồi dán access_token (không cần gõ chữ "Bearer ").
+# auto_error=False để tự trả 401 thống nhất.
+bearer_scheme = HTTPBearer(
+    auto_error=False,
+    description="Dán access_token lấy từ POST /api/v1/auth/login",
+)
+
+
+def _unauthorized(detail: str) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail=detail,
+        headers={"WWW-Authenticate": "Bearer"},
+    )
 
 
 def get_current_user(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_bearer),
-    db: Session = Depends(get_db)
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(
+        bearer_scheme),
+    db: Session = Depends(get_db),
 ) -> User:
-    """
-    Middleware/Dependency xác thực người dùng qua JWT Bearer Token trong Authorization Header.
-    - Trả về đối tượng User nếu token hợp lệ và tài khoản đang hoạt động.
-    - Trả về HTTP 401 Unauthorized nếu token thiếu, sai hoặc đã hết hạn.
-    - Trả về HTTP 403 Forbidden nếu tài khoản bị khóa (is_active == False).
-    """
-    if not credentials or not credentials.credentials:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Yêu cầu xác thực tài khoản: Vui lòng cung cấp Bearer Token trong Authorization Header.",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    token = credentials.credentials
-    payload = decode_access_token(token)
-    if not payload:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token xác thực không hợp lệ hoặc đã hết hạn.",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    user_id = payload.get("user_id") or payload.get("sub")
-    if not user_id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Payload của Token thiếu thông tin định danh người dùng (user_id).",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+    """Đọc header `Authorization: Bearer <token>` và trả về User hiện tại."""
+    if credentials is None or not credentials.credentials:
+        raise _unauthorized("Chưa đăng nhập hoặc thiếu token")
 
     try:
-        user_id_int = int(user_id)
-    except (ValueError, TypeError):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Định dạng user_id trong token không hợp lệ.",
-            headers={"WWW-Authenticate": "Bearer"},
+        payload = jwt.decode(
+            credentials.credentials,
+            settings.SECRET_KEY,
+            algorithms=[settings.ALGORITHM],
         )
+    except ExpiredSignatureError:  # phải bắt trước JWTError vì là lớp con
+        raise _unauthorized("Token đã hết hạn, vui lòng đăng nhập lại")
+    except JWTError:
+        raise _unauthorized("Token không hợp lệ")
 
-    user = db.query(User).filter(User.id == user_id_int).first()
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Người dùng trong token không tồn tại trên hệ thống.",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+    try:
+        user_id = int(payload.get("sub"))
+    except (TypeError, ValueError):
+        raise _unauthorized("Token không hợp lệ")
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if user is None:
+        raise _unauthorized("Token không hợp lệ")  # user đã bị xóa
 
     if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Tài khoản này đã bị khóa bởi Quản trị viên. Vui lòng liên hệ ban quản trị.",
+            detail="Tài khoản của bạn đã bị khóa",
         )
-
     return user
 
+# Phân quyền ADMIN. Role đọc từ DB (không tin claim trong token).
 
-def require_admin(
-    current_user: User = Depends(get_current_user)
-) -> User:
-    """
-    Middleware/Dependency kiểm tra nghiêm ngặt quyền Quản trị viên (Admin).
-    - Chỉ cho phép người dùng có role == 'ADMIN' hoặc role_id == 1 tiếp tục truy cập.
-    - Nếu không đạt yêu cầu, chặn truy cập và trả về HTTP 403 Forbidden.
-    """
-    is_admin = False
 
-    # 1. Kiểm tra qua quan hệ Role model nếu đã load
-    if hasattr(current_user, "role") and current_user.role and hasattr(current_user.role, "name"):
-        if current_user.role.name.strip().upper() == "ADMIN":
-            is_admin = True
-
-    # 2. Kiểm tra qua role_id mặc định (1 là ADMIN)
-    if current_user.role_id == 1:
-        is_admin = True
-
-    if not is_admin:
+def require_admin(current_user: User = Depends(get_current_user)) -> User:
+    """Chỉ cho phép role ADMIN. Role đọc từ DB (không tin claim trong token)."""
+    role_name = current_user.role.name if current_user.role else ""
+    if role_name.upper() != ADMIN_ROLE_NAME:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Quyền truy cập bị từ chối: Chức năng này chỉ dành riêng cho Quản trị viên (Admin)!",
+            detail="Bạn không có quyền thực hiện thao tác này (yêu cầu quyền Admin)",
         )
-
     return current_user

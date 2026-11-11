@@ -1,11 +1,11 @@
 import os
 import hashlib
 from datetime import datetime, timezone, timedelta
-from typing import Optional, Dict, Any
-from jose import jwt, JWTError
-from passlib.context import CryptContext
-import bcrypt
-from app.core.config import settings, SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES
+from typing import Optional
+from jose import jwt                  # type: ignore[reportMissingModuleSource]
+from passlib.context import CryptContext        # type: ignore[reportMissingModuleSource]
+import bcrypt                               # type: ignore[reportMissingModuleSource]
+from app.core.config import settings
 
 # Khởi tạo đối tượng mã hóa Bcrypt
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
