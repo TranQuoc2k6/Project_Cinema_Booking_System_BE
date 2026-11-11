@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from app.schemas.auth import RegisterRequest, LoginRequest, Token
 from app.schemas.user import UserResponse
+from app.models.user import User
 from app.services import auth_service
 from app.core.dependencies import get_current_user, require_admin
 from app.models.user import User
