@@ -17,7 +17,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from database import engine, SessionLocal, Base
 import app.models
 from app.models import Role, User, Genre, Movie, Cinema, Room, Seat, Showtime
-from app.core.security import get_password_hash
+from app.core.security import hash_password
 
 
 def init_database():
@@ -55,7 +55,7 @@ def seed_users(db):
             "full_name": "Quan Tri Vien He Thong",
             "email": "admin@cinema.com",
             "phone": "0901234567",
-            "password_hash": get_password_hash("admin123"),
+            "password_hash": hash_password("admin123"),
             "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb",
             "is_active": True,
         },
@@ -64,7 +64,7 @@ def seed_users(db):
             "full_name": "Le Van Hung (Admin Quan Ly)",
             "email": "hung.le@cinema.com",
             "phone": "0912345678",
-            "password_hash": get_password_hash("admin123"),
+            "password_hash": hash_password("admin123"),
             "avatar": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d",
             "is_active": True,
         },
@@ -73,7 +73,7 @@ def seed_users(db):
             "full_name": "Nguyen Van Khach Hang",
             "email": "customer@cinema.com",
             "phone": "0987654321",
-            "password_hash": get_password_hash("user123"),
+            "password_hash": hash_password("user123"),
             "avatar": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e",
             "is_active": True,
         },
@@ -82,7 +82,7 @@ def seed_users(db):
             "full_name": "Tran Thi Lan",
             "email": "lan.tran@cinema.com",
             "phone": "0978901234",
-            "password_hash": get_password_hash("user123"),
+            "password_hash": hash_password("user123"),
             "avatar": "https://images.unsplash.com/photo-1494790108377-be9c29b29330",
             "is_active": True,
         },
