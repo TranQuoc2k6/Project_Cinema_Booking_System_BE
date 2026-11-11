@@ -12,19 +12,27 @@ router = APIRouter(
 )
 
 
+
 @router.get("", response_model=MovieListResponse)
 def get_movies(
     status: Optional[Literal["now_showing", "coming_soon"]] = Query(None),
     page: int = Query(1, ge=1),
     limit: int = Query(10, ge=1, le=100),
+    search: Optional[str] = Query(None),
+    genre_id: Optional[int] = Query(None, ge=1),
+    sort_order: Literal["asc", "desc"] = Query("desc"),
     db: Session = Depends(get_db)
 ):
     return movie_service.get_movies(
         db=db,
         status_filter=status,
         page=page,
-        limit=limit
+        limit=limit,
+        search=search,
+        genre_id=genre_id,
+        sort_order=sort_order
     )
+    
 
 
 @router.get("/{movie_id}", response_model=MovieItemResponse)
