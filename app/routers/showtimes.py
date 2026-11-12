@@ -1,11 +1,36 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from datetime import date
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.schemas.showtime import ShowtimeSeatMapResponse
-from app.services.showtime_service import get_showtime_seat_map
+from app.schemas.showtime import CinemaShowtimesResponse, ShowtimeSeatMapResponse
+from app.services.showtime_service import (
+    get_showtime_seat_map,
+    get_upcoming_showtimes,
+)
 from database import get_db
 
 router = APIRouter(prefix="/api/showtimes", tags=["Showtimes"])
+
+
+@router.get(
+    "",
+    response_model=list[CinemaShowtimesResponse],
+    summary="Lấy suất chiếu theo phim, rạp và ngày",
+    description="Chỉ trả về suất chiếu chưa bắt đầu, được nhóm theo rạp.",
+)
+def list_showtimes(
+    movie_id: int | None = Query(None, ge=1, alias="movieId"),
+    cinema_id: int | None = Query(None, ge=1, alias="cinemaId"),
+    show_date: date | None = Query(None, alias="date"),
+    db: Session = Depends(get_db),
+) -> list[CinemaShowtimesResponse]:
+    return get_upcoming_showtimes(
+        db=db,
+        movie_id=movie_id,
+        cinema_id=cinema_id,
+        show_date=show_date,
+    )
 
 
 @router.get(

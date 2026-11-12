@@ -1,3 +1,4 @@
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 
 from sqlalchemy import and_
@@ -5,9 +6,17 @@ from sqlalchemy.orm import Session
 
 from app.models.booking import Booking
 from app.models.booking_seat import BookingSeat
+from app.models.cinema import Cinema
+from app.models.movie import Movie
+from app.models.room import Room
 from app.models.seat import Seat
 from app.models.showtime import Showtime
-from app.schemas.showtime import SeatStatusItem, ShowtimeSeatMapResponse
+from app.schemas.showtime import (
+    CinemaShowtimesResponse,
+    SeatStatusItem,
+    ShowtimeListingItem,
+    ShowtimeSeatMapResponse,
+)
 
 
 # Hệ số nhân giá theo loại ghế
@@ -16,6 +25,60 @@ SEAT_PRICE_MULTIPLIER: dict[str, Decimal] = {
     "vip": Decimal("1.5"),
     "couple": Decimal("2.0"),
 }
+
+
+def get_upcoming_showtimes(
+    db: Session,
+    movie_id: int | None = None,
+    cinema_id: int | None = None,
+    show_date: date | None = None,
+) -> list[CinemaShowtimesResponse]:
+    """Return upcoming showtimes grouped by cinema, with optional filters."""
+    now = datetime.now()
+    query = (
+        db.query(Cinema, Showtime, Movie, Room)
+        .join(Room, Showtime.room_id == Room.id)
+        .join(Cinema, Room.cinema_id == Cinema.id)
+        .join(Movie, Showtime.movie_id == Movie.id)
+        .filter(Showtime.start_time >= now)
+    )
+
+    if movie_id is not None:
+        query = query.filter(Showtime.movie_id == movie_id)
+    if cinema_id is not None:
+        query = query.filter(Cinema.id == cinema_id)
+    if show_date is not None:
+        day_start = datetime.combine(show_date, time.min)
+        day_end = day_start + timedelta(days=1)
+        query = query.filter(
+            Showtime.start_time >= day_start,
+            Showtime.start_time < day_end,
+        )
+
+    rows = query.order_by(Cinema.id.asc(), Showtime.start_time.asc()).all()
+    grouped: dict[int, CinemaShowtimesResponse] = {}
+
+    for cinema, showtime, movie, room in rows:
+        if cinema.id not in grouped:
+            grouped[cinema.id] = CinemaShowtimesResponse(
+                cinema=cinema,
+                showtimes=[],
+            )
+        grouped[cinema.id].showtimes.append(
+            ShowtimeListingItem(
+                id=showtime.id,
+                movie_id=movie.id,
+                movie_title=movie.title,
+                room_id=room.id,
+                room_name=room.name,
+                room_type=room.room_type,
+                start_time=showtime.start_time,
+                end_time=showtime.end_time,
+                price=showtime.price,
+            )
+        )
+
+    return list(grouped.values())
 
 
 def get_showtime_seat_map(

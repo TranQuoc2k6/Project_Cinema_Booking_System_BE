@@ -4,6 +4,8 @@ from enum import Enum
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.schemas.cinema import CinemaResponse
+
 
 class ShowtimeBase(BaseModel):
     movie_id: int = Field(..., gt=0)
@@ -47,6 +49,23 @@ class ShowtimeResponse(ShowtimeBase):
     id: int
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class ShowtimeListingItem(BaseModel):
+    id: int
+    movie_id: int
+    movie_title: str
+    room_id: int
+    room_name: str
+    room_type: str
+    start_time: datetime
+    end_time: datetime
+    price: Decimal
+
+
+class CinemaShowtimesResponse(BaseModel):
+    cinema: CinemaResponse
+    showtimes: list[ShowtimeListingItem]
 
 
 # ---------------------------------------------------------------------------
