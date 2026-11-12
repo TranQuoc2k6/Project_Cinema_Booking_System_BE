@@ -19,7 +19,7 @@ from typing import Optional
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt      # type: ignore[reportMissingModuleSource]
-from jose.exceptions import ExpiredSignatureError           # type: ignore[reportMissingModuleSource]
+from jose.exceptions import ExpiredSignatureError       # type: ignore[reportMissingModuleSource]
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -81,8 +81,6 @@ def get_current_user(
     return user
 
 # Phân quyền ADMIN. Role đọc từ DB (không tin claim trong token).
-
-
 def require_admin(current_user: User = Depends(get_current_user)) -> User:
     """Chỉ cho phép role ADMIN. Role đọc từ DB (không tin claim trong token)."""
     role_name = current_user.role.name if current_user.role else ""

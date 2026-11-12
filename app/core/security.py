@@ -1,7 +1,7 @@
 import os
 import hashlib
 from datetime import datetime, timezone, timedelta
-from typing import Optional
+from typing import Optional, Dict, Any
 from jose import jwt                  # type: ignore[reportMissingModuleSource]
 from passlib.context import CryptContext        # type: ignore[reportMissingModuleSource]
 import bcrypt                               # type: ignore[reportMissingModuleSource]
@@ -65,15 +65,3 @@ def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta]
     to_encode.update({"exp": expire, "iat": now})
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     return encoded_jwt
-
-
-def decode_access_token(token: str) -> Optional[Dict[str, Any]]:
-    """
-    Giải mã và kiểm tra tính hợp lệ của JWT token.
-    Trả về payload nếu token hợp lệ, None nếu hết hạn hoặc không đúng chữ ký.
-    """
-    try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        return payload
-    except JWTError:
-        return None
