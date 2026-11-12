@@ -60,6 +60,15 @@ uvicorn main:app --reload --port 8000
 ```
 Tài liệu Swagger UI tự động: `http://localhost:8000/docs`
 
+### Lấy suất chiếu theo phim, rạp và ngày
+`GET /api/showtimes` hỗ trợ các bộ lọc tùy chọn `movieId`, `cinemaId` và `date` (`YYYY-MM-DD`). Kết quả chỉ gồm suất chiếu chưa bắt đầu và được nhóm theo rạp:
+
+```text
+/api/showtimes?movieId=1&cinemaId=2&date=2026-11-13
+```
+
+Mỗi nhóm chứa thông tin rạp và danh sách suất chiếu, gồm phim, phòng, thời gian và giá vé. Khi không truyền bộ lọc, API trả về tất cả suất chiếu sắp tới.
+
 ### Tạo sơ đồ ghế cho phòng chiếu
 Gửi `POST /api/rooms/{room_id}/seats/generate` với số hàng/cột và số hàng VIP/ghế đôi ở cuối sơ đồ:
 ```json
