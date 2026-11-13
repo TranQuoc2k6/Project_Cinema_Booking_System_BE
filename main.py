@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import movies, auth, admin, seats, showtimes, cinemas, rooms
+from app.routers import movies, auth, admin, seats, showtimes, cinemas, rooms, bookings
+
+
 
 app = FastAPI(
     title="Cinema Booking System API",
