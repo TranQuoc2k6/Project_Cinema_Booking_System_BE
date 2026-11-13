@@ -308,8 +308,8 @@ def seed_cinemas_and_rooms(db):
                             seat_number=seat_num,
                             seat_row=row_char,
                             seat_column=c_idx,
-                            seat_type=seat_type,
-                            is_active=True
+                            seat_type=seat_type.lower(),
+                            is_active=True,
                         )
                         db.add(seat)
                         total_seats_created += 1
