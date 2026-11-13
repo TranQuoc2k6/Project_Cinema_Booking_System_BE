@@ -297,11 +297,11 @@ def seed_cinemas_and_rooms(db):
                     for c_idx in range(1, cols + 1):
                         seat_num = f"{row_char}{c_idx:02d}"
                         if r_idx < rows - 3:
-                            seat_type = "STANDARD"
+                            seat_type = "standard"
                         elif r_idx < rows - 1:
-                            seat_type = "VIP"
+                            seat_type = "vip"
                         else:
-                            seat_type = "COUPLE"
+                            seat_type = "couple"
 
                         seat = Seat(
                             room_id=room.id,
