@@ -12,7 +12,7 @@ from app.models.payment import Payment
 from app.schemas.user import UserResponse
 
 router = APIRouter(
-    tags=["Quản trị hệ thống (Admin Portal)"],
+    tags=["Admin Portal"],
     dependencies=[Depends(require_admin)],  # Toàn bộ router này được bảo vệ bởi require_admin
 )
 
