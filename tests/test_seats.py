@@ -93,6 +93,47 @@ class SeatMapTests(unittest.TestCase):
                         db=db,
                     )
                 self.assertEqual(error.exception.status_code, 409)
+
+                # Overwrite layout with overwrite=True
+                overwrite_resp = generate_room_seat_map(
+                    room_id=room.id,
+                    layout=SeatMapGenerateRequest(rows=2, columns=2, overwrite=True),
+                    db=db,
+                )
+                self.assertEqual(overwrite_resp.total_seats, 4)
+                self.assertEqual(room.total_seats, 4)
+
+                # Test get_room_seats
+                from app.routers.seats import get_room_seats, batch_update_seats, update_single_seat, clear_room_seats
+                from app.schemas.seat import SeatBatchUpdateRequest, SeatType, SeatUpdate
+
+                summary = get_room_seats(room_id=room.id, db=db)
+                self.assertEqual(summary.total_seats, 4)
+                self.assertEqual(len(summary.seats), 4)
+
+                # Test batch update seats
+                seat_ids = [s.id for s in summary.seats[:2]]
+                batch_res = batch_update_seats(
+                    room_id=room.id,
+                    payload=SeatBatchUpdateRequest(seat_ids=seat_ids, seat_type=SeatType.VIP),
+                    db=db,
+                )
+                self.assertEqual(batch_res["updated_count"], 2)
+
+                # Verify updated seat
+                single_seat = update_single_seat(
+                    room_id=room.id,
+                    seat_id=seat_ids[0],
+                    payload=SeatUpdate(seat_type=SeatType.COUPLE, is_active=False),
+                    db=db,
+                )
+                self.assertEqual(single_seat.seat_type, "couple")
+                self.assertFalse(single_seat.is_active)
+
+                # Test clear_room_seats
+                del_res = clear_room_seats(room_id=room.id, db=db)
+                self.assertEqual(del_res["deleted_count"], 4)
+                self.assertEqual(room.total_seats, 0)
         finally:
             Base.metadata.drop_all(engine)
             engine.dispose()
