@@ -42,6 +42,7 @@ class SeatMapGenerateRequest(BaseModel):
     columns: int = Field(..., ge=1, le=2000)
     vip_rows: int = Field(0, ge=0, le=2000)
     couple_rows: int = Field(0, ge=0, le=2000)
+    overwrite: bool = False
 
     @model_validator(mode="after")
     def validate_layout(self) -> "SeatMapGenerateRequest":
@@ -57,4 +58,21 @@ class SeatMapGenerationResponse(BaseModel):
     rows: int
     columns: int
     total_seats: int
+    seats: list[SeatResponse]
+
+
+class SeatBatchUpdateRequest(BaseModel):
+    seat_ids: list[int] = Field(..., min_length=1)
+    seat_type: SeatType | None = None
+    is_active: bool | None = None
+
+
+class RoomSeatsSummaryResponse(BaseModel):
+    room_id: int
+    total_seats: int
+    rows_count: int
+    columns_count: int
+    standard_seats: int
+    vip_seats: int
+    couple_seats: int
     seats: list[SeatResponse]

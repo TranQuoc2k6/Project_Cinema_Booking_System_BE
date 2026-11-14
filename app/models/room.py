@@ -20,3 +20,7 @@ class Room(Base):
 
     # Quan hệ 1-N với Showtime
     showtimes = relationship("Showtime", back_populates="room", cascade="all, delete-orphan")
+
+    @property
+    def cinema_name(self) -> str | None:
+        return self.cinema.name if self.cinema else None
