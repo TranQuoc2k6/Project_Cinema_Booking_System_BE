@@ -27,12 +27,17 @@ class UserCreate(UserBase):
     role_id: Optional[int] = 2
 
 
-# Schema cập nhật thông tin Người dùng
+# Schema cập nhật thông tin Người dùng (Hồ sơ cá nhân)
 class UserUpdate(BaseModel):
-    full_name: Optional[str] = Field(None, min_length=2, max_length=100)
-    phone: Optional[str] = Field(None, pattern=r"^(0|\+84)[0-9]{9}$")
-    avatar: Optional[str] = None
-    is_active: Optional[bool] = None
+    full_name: Optional[str] = Field(None, min_length=2, max_length=100, description="Họ và tên mới")
+    phone: Optional[str] = Field(None, pattern=r"^(0|\+84)[0-9]{9}$", description="Số điện thoại mới")
+    avatar: Optional[str] = Field(None, description="URL ảnh đại diện mới")
+
+
+# Schema đổi mật khẩu (yêu cầu xác thực mật khẩu cũ)
+class ChangePasswordRequest(BaseModel):
+    old_password: str = Field(..., min_length=6, description="Mật khẩu hiện tại")
+    new_password: str = Field(..., min_length=6, description="Mật khẩu mới (tối thiểu 6 ký tự)")
 
 
 # Schema phản hồi thông tin Người dùng (Ẩn password_hash)
