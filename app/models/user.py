@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Text
 from sqlalchemy.orm import relationship
 from database import Base
 
@@ -13,7 +13,7 @@ class User(Base):
     email = Column(String(100), unique=True, nullable=False, index=True)
     phone = Column(String(20), unique=True, nullable=True)
     password_hash = Column(String(255), nullable=False)
-    avatar = Column(String(255), nullable=True)
+    avatar = Column(Text, nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)  # Trạng thái tài khoản (True: Hoạt động, False: Bị khóa)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
