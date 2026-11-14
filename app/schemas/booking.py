@@ -114,3 +114,23 @@ class BookingListResponse(BaseModel):
     page:     int
     per_page: int
     items:    List[BookingResponse]
+
+
+# ---------------------------------------------------------------------------
+# Seat-hold schemas (Task T3C6902)
+# ---------------------------------------------------------------------------
+
+class BookingHoldRequest(BookingCreate):
+    """
+    Request payload cho endpoint POST /api/bookings/hold.
+    Tương đương BookingCreate (showtime_id, seat_ids tối đa 8 ghế).
+    """
+    pass
+
+
+class BookingHoldResponse(BookingDetailResponse):
+    """
+    Response payload cho endpoint POST /api/bookings/hold.
+    Bao gồm thông tin booking, booking_code, held_until và danh sách booking_seats.
+    """
+    pass
