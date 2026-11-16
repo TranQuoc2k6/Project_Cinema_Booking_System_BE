@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_current_user, get_db
 from app.models.user import User
-from app.schemas.booking import BookingHoldRequest, BookingHoldResponse
+from app.schemas.booking import BookingHoldRequest, BookingHoldResponse, MyTicketResponse
 from app.services import booking_service
 
 router = APIRouter(prefix="/api/bookings", tags=["Bookings"])
@@ -36,3 +36,40 @@ def hold_seats(
         db=db,
     )
     return booking
+
+
+@router.get(
+    "/my-tickets",
+    response_model=list[MyTicketResponse],
+    summary="Lấy danh sách vé đã đặt của tôi (Task T3C5D0B)",
+    description="Trả về danh sách vé với thông tin phim, rạp, suất, ghế, mã vé, trạng thái thanh toán. Hỗ trợ lọc theo tab: upcoming (sắp chiếu), watched (đã xem), cancelled (đã hủy/hết hạn).",
+)
+def get_my_tickets(
+    status_filter: str | None = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """API lấy danh sách vé của người dùng hiện tại"""
+    return booking_service.get_user_bookings(
+        user_id=current_user.id,
+        status_filter=status_filter,
+        db=db,
+    )
+
+
+# Alias tương thích cho FE nếu gọi /my-bookings
+@router.get(
+    "/my-bookings",
+    response_model=list[MyTicketResponse],
+    include_in_schema=False,
+)
+def get_my_bookings_alias(
+    status_filter: str | None = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return booking_service.get_user_bookings(
+        user_id=current_user.id,
+        status_filter=status_filter,
+        db=db,
+    )
