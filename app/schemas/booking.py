@@ -134,3 +134,58 @@ class BookingHoldResponse(BookingDetailResponse):
     Bao gồm thông tin booking, booking_code, held_until và danh sách booking_seats.
     """
     pass
+
+
+# ---------------------------------------------------------------------------
+# My Tickets / My Bookings Schemas (Task T3C5D0B)
+# ---------------------------------------------------------------------------
+
+class MovieTicketInfo(BaseModel):
+    id: int
+    title: str
+    poster_url: Optional[str] = None
+    duration_minutes: Optional[int] = None
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CinemaTicketInfo(BaseModel):
+    id: int
+    name: str
+    address: Optional[str] = None
+    city: Optional[str] = None
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ShowtimeTicketInfo(BaseModel):
+    id: int
+    start_time: datetime
+    end_time: datetime
+    room_name: str
+    room_type: str
+    cinema: CinemaTicketInfo
+    movie: MovieTicketInfo
+    model_config = ConfigDict(from_attributes=True)
+
+
+class TicketSeatItem(BaseModel):
+    id: int
+    seat_id: int
+    seat_number: str
+    seat_row: Optional[str] = None
+    seat_column: Optional[int] = None
+    seat_type: Optional[str] = None
+    price: Decimal
+    model_config = ConfigDict(from_attributes=True)
+
+
+class MyTicketResponse(BaseModel):
+    id: int
+    booking_code: str
+    status: str
+    payment_status: str                     # PENDING / PAID / CANCELLED / EXPIRED
+    total_price: Decimal
+    held_until: Optional[datetime] = None
+    created_at: datetime
+    showtime: ShowtimeTicketInfo
+    seats: List[TicketSeatItem]
+    model_config = ConfigDict(from_attributes=True)

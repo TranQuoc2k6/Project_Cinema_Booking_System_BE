@@ -106,3 +106,110 @@ def hold_seats(showtime_id: int, seat_ids: List[int], user_id: int, db: Session)
     # Đánh giá lại để trả về đối tượng Booking đã lưu (làm mới session)
     db.refresh(booking)
     return booking
+
+
+def get_user_bookings(user_id: int, status_filter: str | None, db: Session) -> list:
+    """
+    Lấy danh sách vé đã đặt của user (Task T3C5D0B).
+    status_filter có thể là:
+      - 'upcoming' (Sắp chiếu: status=DA_THANH_TOAN hoặc GIU_CHO và showtime.start_time > now)
+      - 'watched'  (Đã xem: status=DA_THANH_TOAN và showtime.end_time <= now)
+      - 'cancelled' (Đã hủy / Hết hạn: status IN ('DA_HUY', 'HET_HAN'))
+      - Hoặc None / 'all' (Tất cả)
+    """
+    now = datetime.utcnow()
+    query = db.query(Booking).filter(Booking.user_id == user_id)
+
+    # Tự động cập nhật các booking GIU_CHO đã quá hạn held_until sang HET_HAN
+    expired_bookings = query.filter(
+        Booking.status == "GIU_CHO",
+        Booking.held_until < now
+    ).all()
+    if expired_bookings:
+        for eb in expired_bookings:
+            eb.status = "HET_HAN"
+        db.commit()
+
+    # Query lại để lấy danh sách đầy đủ kèm quan hệ
+    bookings = db.query(Booking).filter(Booking.user_id == user_id).order_by(Booking.created_at.desc()).all()
+
+    result = []
+    for b in bookings:
+        st = b.showtime
+        if not st:
+            continue
+
+        movie = st.movie
+        room = st.room
+        cinema = room.cinema if room else None
+
+        # Xác định trạng thái thanh toán hiển thị
+        if b.status == "DA_THANH_TOAN":
+            payment_status = "PAID"
+        elif b.status == "GIU_CHO":
+            payment_status = "PENDING"
+        elif b.status == "DA_HUY":
+            payment_status = "CANCELLED"
+        else:
+            payment_status = "EXPIRED"
+
+        # Phân loại tab
+        # 1. 'upcoming': Suất chiếu sắp tới & chưa hủy/hết hạn
+        is_upcoming = (b.status in ("DA_THANH_TOAN", "GIU_CHO")) and (st.start_time > now)
+        # 2. 'watched': Đã thanh toán và suất chiếu đã kết thúc hoặc bắt đầu
+        is_watched = (b.status == "DA_THANH_TOAN") and (st.start_time <= now)
+        # 3. 'cancelled': Đã hủy hoặc hết hạn
+        is_cancelled = b.status in ("DA_HUY", "HET_HAN")
+
+        if status_filter == "upcoming" and not is_upcoming:
+            continue
+        elif status_filter == "watched" and not is_watched:
+            continue
+        elif status_filter == "cancelled" and not is_cancelled:
+            continue
+
+        # Danh sách ghế
+        seats_data = []
+        for bs in b.booking_seats:
+            seat_obj = bs.seat
+            seats_data.append({
+                "id": bs.id,
+                "seat_id": bs.seat_id,
+                "seat_number": seat_obj.seat_number if seat_obj else f"Ghế {bs.seat_id}",
+                "seat_row": seat_obj.seat_row if seat_obj else None,
+                "seat_column": seat_obj.seat_column if seat_obj else None,
+                "seat_type": seat_obj.seat_type if seat_obj else "standard",
+                "price": bs.price,
+            })
+
+        result.append({
+            "id": b.id,
+            "booking_code": b.booking_code,
+            "status": b.status,
+            "payment_status": payment_status,
+            "total_price": b.total_price,
+            "held_until": b.held_until,
+            "created_at": b.created_at,
+            "showtime": {
+                "id": st.id,
+                "start_time": st.start_time,
+                "end_time": st.end_time,
+                "room_name": room.name if room else "Phòng chiếu",
+                "room_type": room.room_type if room else "2D",
+                "cinema": {
+                    "id": cinema.id if cinema else 0,
+                    "name": cinema.name if cinema else "Rạp chiếu phim",
+                    "address": cinema.address if cinema else None,
+                    "city": cinema.city if cinema else None,
+                },
+                "movie": {
+                    "id": movie.id if movie else 0,
+                    "title": movie.title if movie else "Tên phim",
+                    "poster_url": movie.poster_url if movie else None,
+                    "duration_minutes": movie.duration_minutes if movie else 120,
+                },
+            },
+            "seats": seats_data,
+        })
+
+    return result
