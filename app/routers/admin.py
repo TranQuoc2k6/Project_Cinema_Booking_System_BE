@@ -1,5 +1,5 @@
 from typing import List, Optional, Literal
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
@@ -264,3 +264,18 @@ def admin_delete_movie(
 ):
     """API Xóa bộ phim khỏi cơ sở dữ liệu."""
     return movie_service.admin_delete_movie(db=db, movie_id=movie_id)
+
+
+@router.post("/movies/upload-poster", summary="Admin: Upload ảnh Poster phim (.jpg/.png, tối đa 5MB)")
+def admin_upload_movie_poster(
+    file: UploadFile = File(..., description="File ảnh poster định dạng .jpg, .jpeg, .png (tối đa 5MB)")
+):
+    """
+    API Upload Poster phim dành cho Quản trị viên (SRS 1.2):
+    - Tiếp nhận ảnh định dạng .jpg, .jpeg, .png
+    - Giới hạn dung lượng tối đa 5MB
+    - Lưu file vào thư mục tĩnh uploads/posters/
+    - Trả về URL ảnh để lưu vào database và xem trước
+    """
+    return movie_service.save_movie_poster(file=file)
+

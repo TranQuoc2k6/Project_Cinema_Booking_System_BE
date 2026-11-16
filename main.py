@@ -1,5 +1,7 @@
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from app.routers import movies, auth, admin, seats, showtimes, cinemas, rooms, bookings, users
 
 app = FastAPI(
@@ -16,6 +18,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Tạo và Mount thư mục tĩnh /uploads phục vụ ảnh poster, avatar (SRS 1.2)
+UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "app", "uploads")
+os.makedirs(os.path.join(UPLOAD_DIR, "posters"), exist_ok=True)
+os.makedirs(os.path.join(UPLOAD_DIR, "avatars"), exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 # Đăng ký các router vào hệ thống
 app.include_router(movies.router)

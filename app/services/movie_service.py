@@ -1,10 +1,12 @@
+import os
 import re
+import uuid
 import unicodedata
 from datetime import date, datetime
 from typing import Optional, List, Dict, Any
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from fastapi import HTTPException, status
+from fastapi import HTTPException, status, UploadFile
 
 from app.models.movie import Movie
 from app.models.showtime import Showtime
@@ -640,4 +642,85 @@ def admin_delete_movie(db: Session, movie_id: int) -> Dict[str, Any]:
         "status": "success",
         "message": f"Đã xóa vĩnh viễn bộ phim '{title}' khỏi hệ thống.",
         "movie_id": movie_id
+    }
+
+
+# ============================================================================
+# XỬ LÝ UPLOAD ẢNH POSTER (SRS 1.2: Định dạng jpg/png, giới hạn dung lượng 5MB)
+# ============================================================================
+
+ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png"}
+ALLOWED_MIME_TYPES = {"image/jpeg", "image/png", "image/jpg", "application/octet-stream"}
+MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB in bytes
+
+
+def save_movie_poster(file: UploadFile, base_url: str = "") -> Dict[str, Any]:
+    """
+    Xử lý upload ảnh poster cho phim:
+    - Kiểm tra định dạng: Chỉ chấp nhận .jpg, .jpeg, .png
+    - Kiểm tra dung lượng tối đa: 5MB
+    - Lưu file vào thư mục tĩnh app/uploads/posters/
+    - Trả về URL để lưu vào database và xem trước
+    """
+    filename = file.filename or ""
+    ext = os.path.splitext(filename)[1].lower()
+
+    # 1. Kiểm tra định dạng đuôi file
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Định dạng ảnh không hợp lệ ('{ext}'). Chỉ chấp nhận file ảnh định dạng .jpg, .jpeg, .png."
+        )
+
+    # 2. Đọc nội dung file và kiểm tra dung lượng
+    try:
+        content = file.file.read()
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Không thể đọc nội dung file ảnh: {str(e)}"
+        )
+
+    file_size = len(content)
+    if file_size > MAX_FILE_SIZE:
+        max_mb = MAX_FILE_SIZE / (1024 * 1024)
+        current_mb = round(file_size / (1024 * 1024), 2)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Dung lượng ảnh ({current_mb}MB) vượt quá giới hạn cho phép (tối đa {max_mb}MB)."
+        )
+
+    if file_size == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File ảnh rỗng (0 bytes). Vui lòng chọn lại file ảnh hợp lệ."
+        )
+
+    # 3. Tạo tên file duy nhất tránh xung đột ghi đè
+    clean_stem = re.sub(r'[^a-zA-Z0-9_-]', '', os.path.splitext(filename)[0])[:30]
+    unique_suffix = uuid.uuid4().hex[:10]
+    unique_filename = f"poster_{clean_stem}_{unique_suffix}{ext}" if clean_stem else f"poster_{unique_suffix}{ext}"
+
+    # 4. Xác định đường dẫn thư mục lưu trữ
+    upload_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads", "posters")
+    os.makedirs(upload_dir, exist_ok=True)
+    file_path = os.path.join(upload_dir, unique_filename)
+
+    # 5. Lưu nội dung file vào đĩa
+    with open(file_path, "wb") as f:
+        f.write(content)
+
+    relative_url = f"/uploads/posters/{unique_filename}"
+    full_url = f"{base_url.rstrip('/')}{relative_url}" if base_url else relative_url
+
+    return {
+        "status": "success",
+        "message": "Upload ảnh poster thành công!",
+        "file_name": unique_filename,
+        "original_name": filename,
+        "poster_url": relative_url,
+        "full_url": full_url,
+        "file_size": file_size,
+        "file_size_formatted": f"{round(file_size / 1024, 1)} KB",
+        "content_type": file.content_type or f"image/{ext.replace('.', '')}"
     }

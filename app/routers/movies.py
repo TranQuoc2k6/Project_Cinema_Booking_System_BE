@@ -1,5 +1,5 @@
 from typing import Literal, Optional
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, status, UploadFile, File
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -57,3 +57,10 @@ def update_movie(
 @router.delete("/{movie_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_movie(movie_id: int, db: Session = Depends(get_db)):
     return movie_service.delete_movie(db=db, movie_id=movie_id)
+
+
+@router.post("/upload-poster", summary="Upload ảnh Poster phim (.jpg/.png, tối đa 5MB)")
+def upload_movie_poster(
+    file: UploadFile = File(..., description="File ảnh poster định dạng .jpg, .jpeg, .png (tối đa 5MB)")
+):
+    return movie_service.save_movie_poster(file=file)
