@@ -119,7 +119,7 @@ def seed_genres(db):
 
 
 def seed_movies(db):
-    """4. Seed danh sách phim và gán thể loại"""
+    """4. Seed danh sách phim (gồm 6 phim đang chiếu & 3 phim sắp công chiếu với Poster HD sắc nét)"""
     print("\n--> 5. Dang kiem tra va seed Danh sach phim (Movies)...")
     movies_data = [
         {
@@ -128,7 +128,7 @@ def seed_movies(db):
             "description": "Cau chuyen tinh cam sau sac, nhieu bien co xoay quanh cuoc doi cua Mai va Duong.",
             "duration_minutes": 131,
             "release_date": date(2024, 2, 10),
-            "poster_url": "https://upload.wikimedia.org/wikipedia/vi/4/47/Mai_poster.jpg",
+            "poster_url": "https://images.unsplash.com/photo-1534447677768-be436bb09401?w=800&auto=format&fit=crop&q=80",
             "trailer_url": "https://www.youtube.com/watch?v=0wQv7n38h6g",
             "status": "NOW_SHOWING",
             "genres": ["Tinh Cam", "Tam Ly - Gia Dinh"]
@@ -139,7 +139,7 @@ def seed_movies(db):
             "description": "Bo phim gia dinh xuc dong ve tinh mau tu thieng lieng cua ba Hai 73 tuoi.",
             "duration_minutes": 138,
             "release_date": date(2024, 4, 26),
-            "poster_url": "https://upload.wikimedia.org/wikipedia/vi/0/05/Lat_Mat_7_poster.jpg",
+            "poster_url": "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=800&auto=format&fit=crop&q=80",
             "trailer_url": "https://www.youtube.com/watch?v=8RjQzQ2Q_54",
             "status": "NOW_SHOWING",
             "genres": ["Tam Ly - Gia Dinh", "Hai Huoc"]
@@ -172,7 +172,7 @@ def seed_movies(db):
             "description": "Tran chien dinh cao giua Godzilla va Kong chong lai moi de doa an sau trong Trai Dat.",
             "duration_minutes": 115,
             "release_date": date(2024, 3, 29),
-            "poster_url": "https://image.tmdb.org/t/p/original/bQ2ywkchCe02AcSnMuVeZ2QIDe.jpg",
+            "poster_url": "https://images.unsplash.com/photo-1578632767115-351597cf2477?w=800&auto=format&fit=crop&q=80",
             "trailer_url": "https://www.youtube.com/watch?v=lV1OOlGwExg",
             "status": "NOW_SHOWING",
             "genres": ["Hanh Dong", "Khoa Hoc Vien Tuong"]
@@ -188,23 +188,46 @@ def seed_movies(db):
             "status": "NOW_SHOWING",
             "genres": ["Hoat Hinh", "Hai Huoc", "Hanh Dong"]
         },
+        # --- 3 PHIM SAP CONG CHIEU (COMING_SOON) VOI POSTER HD SAC NET ---
         {
-            "title": "Conan: Ngoi Sao 5 Canh 1 Trieu Do",
-            "slug": "conan-ngoi-sao-5-canh-1-trieu-do",
-            "description": "Cuoc ruot duoi tranh doat thanh kiem giua Sieu dao chich Kid, Hattori va Conan.",
-            "duration_minutes": 110,
-            "release_date": date.today() + timedelta(days=14),
-            "poster_url": "https://image.tmdb.org/t/p/original/7kAC1R8gE7o9U9zW3l3Z5Y2mB1.jpg",
-            "trailer_url": "https://www.youtube.com/watch?v=conan_trailer",
+            "title": "Deadpool & Wolverine",
+            "slug": "deadpool-and-wolverine",
+            "description": "Su ket hop lich su va day bung no giua hai di nhan bieu tuong cua Marvel trong chuyen phieu luu da vu tru.",
+            "duration_minutes": 128,
+            "release_date": date.today() + timedelta(days=12),
+            "poster_url": "https://image.tmdb.org/t/p/original/8cdWjvZQUExUUTzyp4t6EDMubfO.jpg",
+            "trailer_url": "https://www.youtube.com/watch?v=73_1biulkYk",
             "status": "COMING_SOON",
-            "genres": ["Hoat Hinh", "Hanh Dong"]
+            "genres": ["Hanh Dong", "Hai Huoc", "Khoa Hoc Vien Tuong"]
+        },
+        {
+            "title": "Moana 2: Hanh Trinh Bien Ca",
+            "slug": "moana-2-hanh-trinh-bien-ca",
+            "description": "Moana cung a than Maui buoc vao hanh trinh tham hiem dai duong bao la day hiem nguy va ky vi moi.",
+            "duration_minutes": 100,
+            "release_date": date.today() + timedelta(days=19),
+            "poster_url": "https://image.tmdb.org/t/p/original/yh64qw9mgXBvlaWDi7Q9tpUBAvH.jpg",
+            "trailer_url": "https://www.youtube.com/watch?v=hDZ7y8RP5HE",
+            "status": "COMING_SOON",
+            "genres": ["Hoat Hinh", "Hai Huoc"]
+        },
+        {
+            "title": "Vo Si Giac Dau II (Gladiator II)",
+            "slug": "gladiator-2-vo-si-giac-dau",
+            "description": "Truong thien su thi ruc lua tai dau truong La Ma co dai noi tiep huyen thoai doat giai Oscar nam 2000.",
+            "duration_minutes": 148,
+            "release_date": date.today() + timedelta(days=32),
+            "poster_url": "https://image.tmdb.org/t/p/original/2cxhvwyEwRlysAmRH4iodkvo0z5.jpg",
+            "trailer_url": "https://www.youtube.com/watch?v=4rgYUipGJNo",
+            "status": "COMING_SOON",
+            "genres": ["Hanh Dong", "Tam Ly - Gia Dinh"]
         }
     ]
 
     for m_info in movies_data:
+        genre_names = m_info.pop("genres")
         existing = db.query(Movie).filter(Movie.slug == m_info["slug"]).first()
         if not existing:
-            genre_names = m_info.pop("genres")
             movie = Movie(**m_info)
             for g_name in genre_names:
                 g_obj = db.query(Genre).filter(Genre.name == g_name).first()
@@ -212,6 +235,13 @@ def seed_movies(db):
                     movie.genres.append(g_obj)
             db.add(movie)
             print(f"    + Da them phim: {m_info['title']} ({m_info['duration_minutes']} phut) - {m_info['status']}")
+        else:
+            # Cập nhật thông tin và poster HD mới nhất
+            existing.poster_url = m_info["poster_url"]
+            existing.status = m_info["status"]
+            existing.release_date = m_info["release_date"]
+            existing.description = m_info["description"]
+            print(f"    ~ Da cap nhat poster HD: {m_info['title']} - {m_info['status']}")
     db.commit()
     print("    [OK] Hoan thanh seed Phim.")
 
