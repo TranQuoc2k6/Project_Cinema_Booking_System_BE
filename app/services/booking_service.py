@@ -4,16 +4,22 @@ Provides seat‑hold functionality (task T3C6902).
 """
 from datetime import datetime, timedelta
 from decimal import Decimal
-from typing import List
+from typing import List, Optional, Dict, Any
 
 from fastapi import HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from sqlalchemy import func, or_, desc
 
 from app.models.booking import Booking
 from app.models.booking_seat import BookingSeat
 from app.models.seat import Seat
 from app.models.showtime import Showtime
+from app.models.user import User
+from app.models.movie import Movie
+from app.models.room import Room
+from app.models.cinema import Cinema
+from app.models.payment import Payment
 
 
 def _calculate_total_price(seat_ids: List[int], db: Session) -> Decimal:
@@ -213,3 +219,220 @@ def get_user_bookings(user_id: int, status_filter: str | None, db: Session) -> l
         })
 
     return result
+
+
+# ============================================================================
+# API QUẢN TRỊ ĐƠN VÉ (ADMIN BOOKING MANAGEMENT)
+# ============================================================================
+
+def format_booking_admin(b: Booking) -> Dict[str, Any]:
+    """Helper định dạng chi tiết một đơn vé cho Admin Portal."""
+    st = b.showtime
+    movie = st.movie if st else None
+    room = st.room if st else None
+    cinema = room.cinema if (room and hasattr(room, "cinema")) else None
+    user = b.user
+
+    # Trạng thái chuẩn hóa
+    raw_status = (b.status or "").upper()
+    if raw_status in ["DA_THANH_TOAN", "CONFIRMED", "SUCCESS"]:
+        status_label = "confirmed"
+    elif raw_status in ["GIU_CHO", "PENDING"]:
+        status_label = "pending"
+    else:
+        status_label = "cancelled"
+
+    # Danh sách ghế
+    seats_list = []
+    seat_details = []
+    for bs in (b.booking_seats or []):
+        seat_obj = bs.seat
+        s_num = seat_obj.seat_number if seat_obj else f"Ghế #{bs.seat_id}"
+        seats_list.append(s_num)
+        seat_details.append({
+            "id": bs.id,
+            "seat_id": bs.seat_id,
+            "seat_number": s_num,
+            "seat_type": seat_obj.seat_type if seat_obj else "standard",
+            "price": float(bs.price or 0)
+        })
+
+    # Phương thức thanh toán
+    payment_method = "MOMO"
+    payment_status = "success" if status_label == "confirmed" else status_label
+    if b.payments and len(b.payments) > 0:
+        p = b.payments[0]
+        payment_method = p.payment_method or "Chuyển khoản"
+        payment_status = p.status or payment_status
+
+    showtime_str = st.start_time.strftime("%H:%M • %d/%m/%Y") if st and st.start_time else "Chưa xếp lịch"
+    showtime_date = st.start_time.strftime("%Y-%m-%d") if st and st.start_time else ""
+
+    return {
+        "id": b.id,
+        "code": b.booking_code,
+        "booking_code": b.booking_code,
+        "customer_name": user.full_name if user else "Khách vãng lai",
+        "customer_phone": user.phone if (user and user.phone) else "",
+        "customer_email": user.email if user else "",
+        "user_id": b.user_id,
+        "movie_id": movie.id if movie else None,
+        "movie_title": movie.title if movie else "Chưa rõ phim",
+        "movie_poster": movie.poster_url if movie else "",
+        "cinema_id": cinema.id if cinema else None,
+        "cinema_name": cinema.name if cinema else "Rạp chiếu phim",
+        "room_id": room.id if room else None,
+        "room_name": room.name if room else "Phòng chiếu",
+        "room_type": room.room_type if room else "2D",
+        "showtime_id": b.showtime_id,
+        "showtime": showtime_str,
+        "showtime_date": showtime_date,
+        "showtime_start": st.start_time.isoformat() if st and st.start_time else None,
+        "seats": seats_list,
+        "seat_details": seat_details,
+        "total_price": float(b.total_price or 0),
+        "payment_method": payment_method,
+        "payment_status": payment_status,
+        "status": status_label,
+        "raw_status": b.status,
+        "booking_time": b.created_at.strftime("%Y-%m-%d %H:%M:%S") if b.created_at else "",
+        "created_at": b.created_at.isoformat() if b.created_at else None,
+    }
+
+
+def admin_get_bookings(
+    db: Session,
+    page: int = 1,
+    limit: int = 50,
+    movie_id: Optional[int] = None,
+    date_str: Optional[str] = None,
+    status_filter: Optional[str] = None,
+    search: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    API lấy danh sách vé cho Quản trị viên:
+    - Lọc theo phim (movie_id)
+    - Lọc theo ngày chiếu hoặc ngày đặt vé (date_str: YYYY-MM-DD)
+    - Lọc theo trạng thái (confirmed, pending, cancelled, all)
+    - Tìm kiếm theo mã vé (booking_code) hoặc số điện thoại khách hàng (phone)
+    """
+    # Join Booking với Showtime và User để lọc linh hoạt
+    query = db.query(Booking).join(Showtime, Booking.showtime_id == Showtime.id).join(User, Booking.user_id == User.id)
+
+    # 1. Lọc theo phim (movie_id)
+    if movie_id and movie_id > 0:
+        query = query.filter(Showtime.movie_id == movie_id)
+
+    # 2. Lọc theo ngày (YYYY-MM-DD)
+    if date_str and date_str.strip():
+        d = date_str.strip()
+        # Tìm theo ngày chiếu hoặc ngày tạo đơn vé
+        query = query.filter(
+            or_(
+                func.date(Showtime.start_time) == d,
+                func.date(Booking.created_at) == d
+            )
+        )
+
+    # 3. Lọc theo trạng thái
+    if status_filter and status_filter.lower() != "all":
+        st = status_filter.lower()
+        if st in ["confirmed", "da_thanh_toan"]:
+            query = query.filter(Booking.status.in_(["DA_THANH_TOAN", "confirmed", "CONFIRMED", "success"]))
+        elif st in ["pending", "giu_cho"]:
+            query = query.filter(Booking.status.in_(["GIU_CHO", "pending", "PENDING"]))
+        elif st in ["cancelled", "da_huy", "het_han"]:
+            query = query.filter(Booking.status.in_(["DA_HUY", "cancelled", "CANCELLED", "HET_HAN", "expired"]))
+
+    # 4. Tìm kiếm theo mã vé hoặc Số điện thoại
+    if search and search.strip():
+        term = f"%{search.strip().lstrip('#')}%"
+        query = query.filter(
+            or_(
+                Booking.booking_code.ilike(term),
+                User.phone.ilike(term),
+                User.full_name.ilike(term),
+                User.email.ilike(term)
+            )
+        )
+
+    total_records = query.count()
+    offset_val = (page - 1) * limit
+    bookings = query.order_by(desc(Booking.created_at)).offset(offset_val).limit(limit).all()
+
+    items = [format_booking_admin(b) for b in bookings]
+    total_pages = (total_records + limit - 1) // limit if limit > 0 else 1
+
+    return {
+        "status": "success",
+        "total": total_records,
+        "page": page,
+        "limit": limit,
+        "total_pages": total_pages,
+        "items": items
+    }
+
+
+def admin_get_booking_by_id(db: Session, booking_id: int) -> Dict[str, Any]:
+    """Xem chi tiết đơn vé cho Quản trị viên."""
+    booking = db.query(Booking).filter(Booking.id == booking_id).first()
+    if not booking:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Không tìm thấy đơn vé với ID #{booking_id}"
+        )
+    return {
+        "status": "success",
+        "data": format_booking_admin(booking)
+    }
+
+
+def admin_cancel_booking(db: Session, booking_id: int) -> Dict[str, Any]:
+    """
+    Hủy vé và giải phóng ghế:
+    - Cập nhật trạng thái đơn vé sang 'DA_HUY'
+    - Xóa các bản ghi BookingSeat tương ứng để giải phóng ghế cho suất chiếu
+    """
+    booking = db.query(Booking).filter(Booking.id == booking_id).first()
+    if not booking:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Không tìm thấy đơn vé với ID #{booking_id}"
+        )
+
+    if (booking.status or "").upper() in ["DA_HUY", "CANCELLED"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Đơn vé này đã được hủy trước đó."
+        )
+
+    # 1. Thu thập tên các ghế để thông báo
+    released_seats = []
+    for bs in booking.booking_seats:
+        s_name = bs.seat.seat_number if bs.seat else f"ID {bs.seat_id}"
+        released_seats.append(s_name)
+
+    # 2. Xóa BookingSeat để giải phóng UNIQUE constraint ghế trong suất chiếu
+    db.query(BookingSeat).filter(BookingSeat.booking_id == booking.id).delete(synchronize_session=False)
+
+    # 3. Cập nhật trạng thái Booking sang DA_HUY
+    booking.status = "DA_HUY"
+    booking.held_until = None
+    booking.updated_at = datetime.utcnow()
+
+    # 4. Hủy các thanh toán liên quan nếu có
+    for p in booking.payments:
+        p.status = "cancelled"
+
+    db.commit()
+    db.refresh(booking)
+
+    seat_info = ", ".join(released_seats) if released_seats else "Không có ghế"
+    return {
+        "status": "success",
+        "message": f"Đã hủy thành công đơn vé #{booking.booking_code}! Ghế [{seat_info}] đã được giải phóng.",
+        "booking_id": booking.id,
+        "booking_code": booking.booking_code,
+        "new_status": "cancelled",
+        "released_seats": released_seats
+    }

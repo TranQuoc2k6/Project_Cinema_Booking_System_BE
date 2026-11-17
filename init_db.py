@@ -10,7 +10,8 @@ from seed_data import (
     seed_genres,
     seed_movies,
     seed_cinemas_and_rooms,
-    seed_showtimes_7days
+    seed_showtimes_7days,
+    seed_sample_bookings
 )
 
 
@@ -29,7 +30,8 @@ def create_tables_and_seed_data():
         seed_movies(db)
         seed_cinemas_and_rooms(db)
         seed_showtimes_7days(db)
-        print("--> Khởi tạo bảng và toàn bộ dữ liệu mẫu 7 ngày thành công!")
+        seed_sample_bookings(db)
+        print("--> Khởi tạo bảng và toàn bộ dữ liệu mẫu 7 ngày kèm đơn vé thành công!")
     except Exception as e:
         db.rollback()
         print(f"--> Loi: {e}")

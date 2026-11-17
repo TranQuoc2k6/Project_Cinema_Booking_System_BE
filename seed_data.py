@@ -16,7 +16,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from database import engine, SessionLocal, Base
 import app.models
-from app.models import Role, User, Genre, Movie, Cinema, Room, Seat, Showtime
+from app.models import Role, User, Genre, Movie, Cinema, Room, Seat, Showtime, Booking, BookingSeat, Payment
 from app.core.security import hash_password
 
 
@@ -419,6 +419,73 @@ def seed_showtimes_7days(db):
     print(f"    [OK] Hoan thanh seed {total_showtimes_created} Suat chieu cho ca 7 ngay!")
 
 
+def seed_sample_bookings(db):
+    """7. Seed đơn vé mẫu đa dạng phục vụ kiểm thử tính năng Quản lý Đơn vé (SRS 1.3)"""
+    print("\n--> 8. Dang kiem tra va seed Don ve mau (Bookings)...")
+    existing_count = db.query(Booking).count()
+    if existing_count > 0:
+        print(f"    [i] Da co {existing_count} don ve trong database, bo qua seed don ve.")
+        return
+
+    users = db.query(User).all()
+    showtimes = db.query(Showtime).all()
+
+    if not users or not showtimes:
+        print("    [!] Chua du User hoac Showtime de seed don ve.")
+        return
+
+    sample_bookings_meta = [
+        {"user_idx": 2, "st_idx": 0, "status": "DA_THANH_TOAN", "method": "MOMO", "code": "BK-9842"},
+        {"user_idx": 3, "st_idx": 1, "status": "DA_THANH_TOAN", "method": "VNPAY", "code": "BK-9841"},
+        {"user_idx": 1, "st_idx": 2, "status": "GIU_CHO", "method": "Thẻ ATM", "code": "BK-9840"},
+        {"user_idx": 2, "st_idx": 3, "status": "DA_HUY", "method": "Tiền mặt", "code": "BK-9839"},
+        {"user_idx": 3, "st_idx": 4, "status": "DA_THANH_TOAN", "method": "VNPAY", "code": "BK-9838"},
+    ]
+
+    for idx, meta in enumerate(sample_bookings_meta):
+        u = users[meta["user_idx"] % len(users)]
+        st = showtimes[meta["st_idx"] % len(showtimes)]
+
+        room_seats = db.query(Seat).filter(Seat.room_id == st.room_id).all()
+        chosen_seats = room_seats[idx * 2: idx * 2 + 2] if len(room_seats) >= (idx * 2 + 2) else room_seats[:2]
+
+        total_p = sum(float(st.price) * (1.3 if s.seat_type == 'vip' else 1.0) for s in chosen_seats)
+        b = Booking(
+            booking_code=meta["code"],
+            user_id=u.id,
+            showtime_id=st.id,
+            total_price=Decimal(total_p),
+            status=meta["status"],
+            held_until=datetime.utcnow() + timedelta(minutes=10) if meta["status"] == "GIU_CHO" else None,
+            created_at=datetime.utcnow() - timedelta(hours=idx * 5 + 1),
+            updated_at=datetime.utcnow()
+        )
+        db.add(b)
+        db.flush()
+
+        if meta["status"] != "DA_HUY":
+            for s in chosen_seats:
+                bs = BookingSeat(
+                    booking_id=b.id,
+                    showtime_id=st.id,
+                    seat_id=s.id,
+                    price=Decimal(st.price) * Decimal(1.3 if s.seat_type == 'vip' else 1.0)
+                )
+                db.add(bs)
+
+        p = Payment(
+            booking_id=b.id,
+            amount=Decimal(total_p),
+            payment_method=meta["method"],
+            status="SUCCESS" if meta["status"] == "DA_THANH_TOAN" else "PENDING",
+            payment_time=b.created_at
+        )
+        db.add(p)
+
+    db.commit()
+    print("    [OK] Da seed 5 don ve mau thanh cong!")
+
+
 def main():
     try:
         init_database()
@@ -430,6 +497,7 @@ def main():
             seed_movies(db)
             seed_cinemas_and_rooms(db)
             seed_showtimes_7days(db)
+            seed_sample_bookings(db)
             print("\n==================================================================")
             print("SEED TOAN BO DU LIEU MAU CHO CA NHOM THANH CONG!")
             print("==================================================================")
