@@ -55,12 +55,39 @@ class ShowtimeListingItem(BaseModel):
     id: int
     movie_id: int
     movie_title: str
+    poster_url: str | None = None
+    duration_minutes: int | None = 120
+    genres: list[str] = []
     room_id: int
     room_name: str
     room_type: str
     start_time: datetime
     end_time: datetime
     price: Decimal
+
+
+class ShowtimeDetailResponse(BaseModel):
+    id: int
+    movie_id: int
+    movie_title: str
+    original_title: str | None = None
+    poster_url: str | None = None
+    duration_minutes: int | None = 120
+    age_rating: str | None = "P"
+    genres: list[str] = []
+    cinema_id: int
+    cinema_name: str
+    city: str
+    cinema_address: str | None = None
+    room_id: int
+    room_name: str
+    room_type: str
+    format: str = "2D"
+    start_time: datetime
+    end_time: datetime
+    price: Decimal
+    available_seats: int = 0
+    total_seats: int = 0
 
 
 class CinemaShowtimesResponse(BaseModel):
