@@ -14,6 +14,7 @@ from app.models.showtime import Showtime
 from app.schemas.showtime import (
     CinemaShowtimesResponse,
     SeatStatusItem,
+    ShowtimeDetailResponse,
     ShowtimeListingItem,
     ShowtimeSeatMapResponse,
 )
@@ -32,6 +33,7 @@ def get_upcoming_showtimes(
     movie_id: int | None = None,
     cinema_id: int | None = None,
     show_date: date | None = None,
+    city: str | None = None,
 ) -> list[CinemaShowtimesResponse]:
     """Return upcoming showtimes grouped by cinema, with optional filters."""
     now = datetime.now()
@@ -47,6 +49,8 @@ def get_upcoming_showtimes(
         query = query.filter(Showtime.movie_id == movie_id)
     if cinema_id is not None:
         query = query.filter(Cinema.id == cinema_id)
+    if city is not None and city.strip() and city.strip().lower() != "all":
+        query = query.filter(Cinema.city.ilike(f"%{city.strip()}%"))
     if show_date is not None:
         day_start = datetime.combine(show_date, time.min)
         day_end = day_start + timedelta(days=1)
@@ -64,11 +68,15 @@ def get_upcoming_showtimes(
                 cinema=cinema,
                 showtimes=[],
             )
+        movie_genres_list = [g.name for g in movie.genres] if hasattr(movie, "genres") and movie.genres else []
         grouped[cinema.id].showtimes.append(
             ShowtimeListingItem(
                 id=showtime.id,
                 movie_id=movie.id,
                 movie_title=movie.title,
+                poster_url=movie.poster_url,
+                duration_minutes=movie.duration_minutes,
+                genres=movie_genres_list,
                 room_id=room.id,
                 room_name=room.name,
                 room_type=room.room_type,
@@ -79,6 +87,60 @@ def get_upcoming_showtimes(
         )
 
     return list(grouped.values())
+
+
+def get_showtime_by_id(
+    showtime_id: int, db: Session
+) -> ShowtimeDetailResponse | None:
+    """Lấy thông tin chi tiết một suất chiếu kèm rạp, phòng và ghế trống."""
+    row = (
+        db.query(Showtime, Movie, Room, Cinema)
+        .join(Movie, Showtime.movie_id == Movie.id)
+        .join(Room, Showtime.room_id == Room.id)
+        .join(Cinema, Room.cinema_id == Cinema.id)
+        .filter(Showtime.id == showtime_id)
+        .first()
+    )
+    if not row:
+        return None
+    showtime, movie, room, cinema = row
+
+    total_seats = db.query(Seat).filter(Seat.room_id == room.id, Seat.is_active == True).count()
+    occupied_count = (
+        db.query(BookingSeat)
+        .join(Booking, BookingSeat.booking_id == Booking.id)
+        .filter(
+            Booking.showtime_id == showtime_id,
+            Booking.status.in_(["PENDING", "CONFIRMED"]),
+        )
+        .count()
+    )
+    available_seats = max(0, total_seats - occupied_count)
+    movie_genres_list = [g.name for g in movie.genres] if hasattr(movie, "genres") and movie.genres else ["Điện ảnh"]
+
+    return ShowtimeDetailResponse(
+        id=showtime.id,
+        movie_id=movie.id,
+        movie_title=movie.title,
+        original_title=getattr(movie, "title", "Phim"),
+        poster_url=movie.poster_url or "",
+        duration_minutes=movie.duration_minutes or 120,
+        age_rating="P",
+        genres=movie_genres_list,
+        cinema_id=cinema.id,
+        cinema_name=cinema.name,
+        city=cinema.city,
+        cinema_address=cinema.address,
+        room_id=room.id,
+        room_name=room.name,
+        room_type=room.room_type,
+        format=room.room_type or "2D",
+        start_time=showtime.start_time,
+        end_time=showtime.end_time,
+        price=showtime.price,
+        available_seats=available_seats,
+        total_seats=total_seats,
+    )
 
 
 def get_showtime_seat_map(
