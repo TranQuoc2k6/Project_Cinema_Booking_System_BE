@@ -22,28 +22,96 @@ from app.models.cinema import Cinema
 from app.models.payment import Payment
 
 
-def _calculate_total_price(seat_ids: List[int], db: Session) -> Decimal:
-    """Tính tổng giá cho danh sách seat_id dựa trên giá snapshot hiện tại.
-    Giả sử mô hình Seat có trường `price_multiplier` (1.0, 1.5, 2.0 ...) và Showtime có `price`.
+# Hệ số nhân giá theo loại ghế (chuẩn toàn hệ thống)
+SEAT_PRICE_MULTIPLIER: dict[str, Decimal] = {
+    "standard": Decimal("1.0"),
+    "vip": Decimal("1.5"),
+    "couple": Decimal("2.0"),
+}
+
+
+def get_seat_multiplier(seat: Optional[Seat]) -> Decimal:
+    """Lấy hệ số nhân giá ghế an toàn (ưu tiên price_multiplier từ DB nếu có)."""
+    if not seat:
+        return Decimal("1.0")
+    m = getattr(seat, "price_multiplier", None)
+    if m is not None:
+        try:
+            return Decimal(str(m))
+        except Exception:
+            pass
+    stype = (seat.seat_type or "standard").lower()
+    return SEAT_PRICE_MULTIPLIER.get(stype, Decimal("1.0"))
+
+
+def clean_expired_holds(db: Session) -> dict:
     """
-    total = Decimal("0")
-    seats = db.query(Seat).filter(Seat.id.in_(seat_ids)).all()
-    if len(seats) != len(seat_ids):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Một hoặc nhiều seat_id không tồn tại",
+    Tự động chuyển giữ chỗ quá hạn sang HET_HAN để trả ghế (Task T3C6CE6).
+    
+    Quy trình:
+      1. Tìm tất cả các booking có status in ('GIU_CHO', 'PENDING') và held_until <= now.
+      2. Thu thập danh sách ID của các booking quá hạn.
+      3. Xóa các BookingSeat tương ứng để giải phóng UNIQUE constraint (showtime_id, seat_id),
+         giúp trả ghế về trạng thái trống (available) cho các khách hàng khác.
+      4. Cập nhật booking.status sang 'HET_HAN', held_until = None, updated_at = now.
+      5. Đánh dấu payment pending tương ứng sang EXPIRED (nếu có).
+      6. Commit transaction và trả về thống kê.
+    """
+    now = datetime.utcnow()
+    expired_bookings = (
+        db.query(Booking)
+        .filter(
+            Booking.status.in_(["GIU_CHO", "PENDING"]),
+            Booking.held_until.isnot(None),
+            Booking.held_until <= now,
         )
-    # Lấy giá của suất chiếu (giá cơ bản) – sẽ được truyền từ hàm gọi.
-    # Ở đây hàm gọi sẽ truyền showtime_price.
-    return total  # placeholder – sẽ được tính trong hold_seats
+        .all()
+    )
+
+    if not expired_bookings:
+        return {
+            "expired_bookings_count": 0,
+            "released_seats_count": 0,
+            "message": "Không có đơn giữ chỗ nào quá hạn.",
+        }
+
+    expired_ids = [b.id for b in expired_bookings]
+
+    # Xóa BookingSeat để giải phóng ghế về trạng thái trống
+    deleted_seats_count = (
+        db.query(BookingSeat)
+        .filter(BookingSeat.booking_id.in_(expired_ids))
+        .delete(synchronize_session=False)
+    )
+
+    # Cập nhật trạng thái Booking sang HET_HAN
+    for b in expired_bookings:
+        b.status = "HET_HAN"
+        b.held_until = None
+        b.updated_at = now
+        for p in b.payments:
+            if (p.status or "").upper() == "PENDING":
+                p.status = "EXPIRED"
+
+    db.commit()
+
+    return {
+        "expired_bookings_count": len(expired_bookings),
+        "released_seats_count": deleted_seats_count,
+        "message": f"Đã giải phóng {deleted_seats_count} ghế từ {len(expired_bookings)} đơn giữ chỗ quá hạn (chuyển sang HET_HAN).",
+    }
 
 
 def hold_seats(showtime_id: int, seat_ids: List[int], user_id: int, db: Session) -> Booking:
     """Tạo một Booking tạm thời (status=GIU_CHO) và giữ các ghế.
+    - Dọn dẹp các đơn giữ chỗ quá hạn trước.
     - Kiểm tra số ghế ≤ 8.
     - Kiểm tra seat thuộc cùng showtime.
     - Sử dụng transaction để đảm bảo UNIQUE constraint (`showtime_id`, `seat_id`).
     """
+    # 0. Tự động giải phóng các ghế giữ chỗ quá hạn trước khi kiểm tra
+    clean_expired_holds(db)
+
     if len(seat_ids) > 8:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -71,47 +139,199 @@ def hold_seats(showtime_id: int, seat_ids: List[int], user_id: int, db: Session)
                 detail="Ghế không thuộc cùng phòng với suất chiếu",
             )
 
-    # Tính total_price dựa trên giá cơ bản + multiplier (giả sử Seat có column `price_multiplier`)
+    # Tính total_price dựa trên giá cơ bản suất chiếu * multiplier của từng ghế
+    base_price = Decimal(str(showtime.price))
     total_price = Decimal("0")
     for seat in seats:
-        multiplier = getattr(seat, "price_multiplier", Decimal("1"))
-        total_price += Decimal(showtime.price) * Decimal(multiplier)
+        mult = get_seat_multiplier(seat)
+        total_price += (base_price * mult).quantize(Decimal("0.01"))
 
-    # Tạo Booking và BookingSeat trong một transaction
+    # Tạo Booking và BookingSeat trong một transaction an toàn
     try:
-        with db.begin():
-            booking = Booking(
-                booking_code=f"BK-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}-{user_id}",
-                user_id=user_id,
-                showtime_id=showtime_id,
-                total_price=total_price,
-                status="GIU_CHO",
-                held_until=datetime.utcnow() + timedelta(minutes=10),
-                created_at=datetime.utcnow(),
-                updated_at=datetime.utcnow(),
-            )
-            db.add(booking)
-            db.flush()  # lấy booking.id
+        booking = Booking(
+            booking_code=f"BK-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}-{user_id}",
+            user_id=user_id,
+            showtime_id=showtime_id,
+            total_price=total_price,
+            status="GIU_CHO",
+            held_until=datetime.utcnow() + timedelta(minutes=10),
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+        )
+        db.add(booking)
+        db.flush()  # lấy booking.id
 
-            # Thêm các BookingSeat – UNIQUE sẽ được kiểm tra ở cấp DB
-            for seat in seats:
-                booking_seat = BookingSeat(
-                    booking_id=booking.id,
-                    showtime_id=showtime_id,
-                    seat_id=seat.id,
-                    price=Decimal(showtime.price) * Decimal(getattr(seat, "price_multiplier", Decimal("1"))),
-                )
-                db.add(booking_seat)
+        # Thêm các BookingSeat – UNIQUE sẽ được kiểm tra ở cấp DB
+        for seat in seats:
+            mult = get_seat_multiplier(seat)
+            seat_price = (base_price * mult).quantize(Decimal("0.01"))
+            booking_seat = BookingSeat(
+                booking_id=booking.id,
+                showtime_id=showtime_id,
+                seat_id=seat.id,
+                price=seat_price,
+            )
+            db.add(booking_seat)
+        db.commit()
     except IntegrityError as e:
+        db.rollback()
         # Vi phạm UNIQUE => ghế đã được giữ hoặc đã đặt
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Một hoặc nhiều ghế đã được giữ hoặc đã đặt",
         ) from e
+    except Exception:
+        db.rollback()
+        raise
 
     # Đánh giá lại để trả về đối tượng Booking đã lưu (làm mới session)
     db.refresh(booking)
     return booking
+
+
+def confirm_booking(
+    db: Session,
+    user: User,
+    booking_id: Optional[int] = None,
+    booking_code: Optional[str] = None,
+    payment_method: str = "MOMO",
+    transaction_id: Optional[str] = None,
+) -> dict:
+    """
+    Xác nhận đặt vé từ ghế đang giữ, tính lại tiền ở server;
+    tự chuyển giữ chỗ quá hạn sang HET_HAN để trả ghế (Task T3C6CE6).
+    """
+    # 1. Tự động giải phóng các ghế giữ chỗ quá hạn
+    clean_expired_holds(db)
+
+    # 2. Tìm đơn đặt vé
+    query = db.query(Booking)
+    if booking_id:
+        booking = query.filter(Booking.id == booking_id).first()
+    elif booking_code:
+        booking = query.filter(Booking.booking_code == booking_code.strip()).first()
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Vui lòng cung cấp booking_id hoặc booking_code để xác nhận đặt vé.",
+        )
+
+    if not booking:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Không tìm thấy đơn đặt vé cần xác nhận.",
+        )
+
+    # 3. Phân quyền: Người dùng chỉ được xác nhận vé của mình (trừ khi là ADMIN)
+    user_role = (user.role.name if user.role else "").upper()
+    if booking.user_id != user.id and user_role != "ADMIN":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Bạn không có quyền xác nhận đơn vé của người khác.",
+        )
+
+    # 4. Kiểm tra trạng thái hiện tại
+    current_status = (booking.status or "").upper()
+    if current_status == "DA_THANH_TOAN":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Đơn vé này đã được thanh toán và xác nhận thành công trước đó.",
+        )
+    if current_status == "DA_HUY":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Đơn vé này đã bị hủy, không thể xác nhận đặt vé.",
+        )
+    if current_status == "HET_HAN":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Đơn vé này đã hết hạn giữ chỗ (HET_HAN). Ghế đã được trả lại. Vui lòng chọn lại ghế.",
+        )
+
+    # 5. Kiểm tra thời hạn giữ chỗ (held_until)
+    now = datetime.utcnow()
+    if booking.held_until and booking.held_until < now:
+        # Quá hạn -> tự động giải phóng ghế sang HET_HAN
+        db.query(BookingSeat).filter(BookingSeat.booking_id == booking.id).delete(synchronize_session=False)
+        booking.status = "HET_HAN"
+        booking.held_until = None
+        booking.updated_at = now
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Thời gian giữ chỗ 10 phút của đơn vé đã quá hạn. Hệ thống đã tự động chuyển sang HET_HAN và trả lại ghế.",
+        )
+
+    # 6. TÍNH LẠI TIỀN Ở SERVER (Server Price Recalculation)
+    showtime = booking.showtime
+    if not showtime:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Suất chiếu của đơn vé không còn tồn tại.",
+        )
+
+    base_price = Decimal(str(showtime.price))
+    if not booking.booking_seats:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Đơn vé không có ghế nào được giữ để xác nhận.",
+        )
+
+    server_total_price = Decimal("0")
+    for bs in booking.booking_seats:
+        seat = bs.seat
+        mult = get_seat_multiplier(seat)
+        calculated_seat_price = (base_price * mult).quantize(Decimal("0.01"))
+        bs.price = calculated_seat_price
+        server_total_price += calculated_seat_price
+
+    # Cập nhật tổng tiền chuẩn xác được tính toán lại tại Server
+    booking.total_price = server_total_price
+
+    # 7. Cập nhật trạng thái Booking sang DA_THANH_TOAN và giải phóng hạn giữ chỗ
+    booking.status = "DA_THANH_TOAN"
+    booking.held_until = None
+    booking.updated_at = now
+
+    # 8. Ghi nhận thông tin thanh toán (Payment)
+    actual_txn_id = transaction_id or f"TXN-{booking.booking_code}-{int(now.timestamp())}"
+    actual_method = (payment_method or "MOMO").upper()
+
+    existing_payment = (
+        db.query(Payment)
+        .filter(Payment.booking_id == booking.id)
+        .first()
+    )
+    if existing_payment:
+        existing_payment.amount = server_total_price
+        existing_payment.payment_method = actual_method
+        existing_payment.status = "SUCCESS"
+        existing_payment.transaction_id = actual_txn_id
+        existing_payment.payment_time = now
+        payment_record = existing_payment
+    else:
+        payment_record = Payment(
+            booking_id=booking.id,
+            amount=server_total_price,
+            payment_method=actual_method,
+            status="SUCCESS",
+            transaction_id=actual_txn_id,
+            payment_time=now,
+        )
+        db.add(payment_record)
+
+    db.commit()
+    db.refresh(booking)
+
+    return {
+        "success": True,
+        "message": f"Xác nhận đặt vé #{booking.booking_code} thành công!",
+        "booking": booking,
+        "recalculated_price": server_total_price,
+        "payment_id": payment_record.id,
+        "payment_status": payment_record.status,
+    }
+
 
 
 def get_user_bookings(user_id: int, status_filter: str | None, db: Session) -> list:

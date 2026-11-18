@@ -189,3 +189,42 @@ class MyTicketResponse(BaseModel):
     showtime: ShowtimeTicketInfo
     seats: List[TicketSeatItem]
     model_config = ConfigDict(from_attributes=True)
+
+
+# ---------------------------------------------------------------------------
+# Booking Confirmation & Auto-expire schemas (Task T3C6CE6)
+# ---------------------------------------------------------------------------
+
+class BookingConfirmRequest(BaseModel):
+    """
+    Request payload xác nhận đặt vé từ ghế đang giữ.
+    Có thể gửi booking_id hoặc booking_code kèm phương thức thanh toán.
+    """
+    booking_id: Optional[int] = Field(None, description="ID đơn đặt vé (nếu không truyền qua URL)")
+    booking_code: Optional[str] = Field(None, description="Mã đơn vé (BK-...)")
+    payment_method: Optional[str] = Field("MOMO", description="Phương thức: VNPAY | MOMO | ZALOPAY | CASH | BANKING")
+    transaction_id: Optional[str] = Field(None, description="Mã giao dịch ngân hàng / ví điện tử nếu có")
+
+
+class BookingConfirmResponse(BaseModel):
+    """
+    Response payload sau khi xác nhận đặt vé thành công.
+    Bao gồm tổng tiền đã được tính lại chuẩn xác ở Server.
+    """
+    success: bool = True
+    message: str = "Xác nhận đặt vé thành công"
+    booking: BookingDetailResponse
+    recalculated_price: Decimal = Field(..., description="Tổng tiền được tính toán lại tại Server")
+    payment_id: Optional[int] = None
+    payment_status: str = "SUCCESS"
+
+
+class CleanExpiredResponse(BaseModel):
+    """
+    Response payload khi dọn dẹp các đơn giữ chỗ quá hạn 10 phút.
+    """
+    success: bool = True
+    expired_bookings_count: int = Field(..., description="Số đơn giữ chỗ quá hạn đã chuyển sang HET_HAN")
+    released_seats_count: int = Field(..., description="Số ghế đã được giải phóng trả về trạng thái trống")
+    message: str
+
