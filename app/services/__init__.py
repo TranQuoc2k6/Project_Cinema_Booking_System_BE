@@ -1,3 +1,4 @@
-# Export booking_service so it can be imported as
-# `from app.services import booking_service`
+# Export services so they can be imported as
+# `from app.services import booking_service, dashboard_service, movie_service, user_service`
 from .booking_service import hold_seats
+from . import dashboard_service

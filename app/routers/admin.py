@@ -17,7 +17,7 @@ from app.schemas.movie import (
     AdminMovieResponse,
     AdminMovieListResponse,
 )
-from app.services import movie_service, booking_service, user_service
+from app.services import movie_service, booking_service, user_service, dashboard_service
 from pydantic import BaseModel
 
 
@@ -52,56 +52,48 @@ def check_admin(admin_user: User = Depends(require_admin)):
     }
 
 
-@router.get("/dashboard/stats", summary="Thống kê tổng quan Dashboard dành cho Quản trị viên")
-def get_dashboard_stats(db: Session = Depends(get_db)):
+@router.get("/dashboard/stats", summary="Thống kê toàn diện Dashboard Quản trị (Doanh thu, Vé bán, Lấp đầy, Theo phim)")
+def get_dashboard_stats(
+    days: int = Query(7, ge=1, le=90, description="Khoảng thời gian thống kê (7, 14, 30 ngày)"),
+    db: Session = Depends(get_db)
+):
     """
-    Cung cấp số liệu tổng quan (KPI Cards) phục vụ giao diện Admin Dashboard:
-    - Tổng doanh thu (VND)
-    - Tổng số vé đã bán
-    - Tổng số phim đang chiếu
-    - Tổng số khách hàng/người dùng
+    Cung cấp số liệu thống kê phân tích thời gian thực dành cho Quản trị viên (SRS 1.4):
+    - Thẻ chỉ số KPI (Tổng doanh thu, Doanh thu hôm nay, Vé bán, Tỷ lệ lấp đầy TB, Phim chiếu, Khách hàng)
+    - Thống kê Doanh thu & Số vé bán theo ngày (kèm dữ liệu biểu đồ)
+    - Thống kê Doanh thu & Số vé bán theo từng bộ phim (Box office)
+    - Tỷ lệ lấp đầy theo suất chiếu / phòng chiếu (Occupancy Rate)
+    - Danh sách đơn đặt vé trực tuyến mới nhất
     """
     try:
-        # 1. Tổng người dùng
-        total_users = db.query(User).count()
-
-        # 2. Tổng số phim đang chiếu
-        total_movies = db.query(Movie).filter(Movie.status.in_(["NOW_SHOWING", "now_showing"])).count()
-        if total_movies == 0:
-            total_movies = db.query(Movie).count()
-
-        # 3. Tổng số đơn vé & vé đã xác nhận
-        total_tickets = db.query(Booking).filter(Booking.status.in_(["confirmed", "success"])).count()
-        if total_tickets == 0:
-            total_tickets = db.query(Booking).count()
-
-        # 4. Tổng doanh thu từ các giao dịch thanh toán thành công
-        revenue_sum = db.query(func.sum(Payment.amount)).filter(Payment.status == "success").scalar()
-        if revenue_sum is None:
-            # Fallback tính theo tổng tiền đơn vé confirmed
-            revenue_sum = db.query(func.sum(Booking.total_price)).filter(Booking.status.in_(["confirmed", "success"])).scalar()
-
-        total_revenue = float(revenue_sum or 0)
-
+        return dashboard_service.get_dashboard_full_stats(db=db, days=days)
+    except Exception as e:
+        # Fallback an toàn nếu có lỗi kết nối đột ngột
         return {
-            "status": "success",
+            "status": "error",
+            "message": str(e),
             "data": {
-                "total_revenue": total_revenue if total_revenue > 0 else 48500000,
-                "total_tickets": total_tickets if total_tickets > 0 else 524,
-                "total_movies": total_movies if total_movies > 0 else 12,
-                "total_users": total_users if total_users > 0 else 158,
-                "occupancy_rate": 78.5,
-            }
-        }
-    except Exception:
-        return {
-            "status": "success",
-            "data": {
-                "total_revenue": 48500000,
-                "total_tickets": 524,
-                "total_movies": 12,
-                "total_users": 158,
-                "occupancy_rate": 78.5,
+                "total_revenue": 0.0,
+                "today_revenue": 0.0,
+                "total_tickets": 0,
+                "today_tickets": 0,
+                "total_movies": 0,
+                "total_users": 0,
+                "occupancy_rate": 0.0,
+                "kpi": {
+                    "total_revenue": 0.0,
+                    "today_revenue": 0.0,
+                    "total_tickets": 0,
+                    "today_tickets": 0,
+                    "total_movies": 0,
+                    "total_users": 0,
+                    "avg_occupancy_rate": 0.0,
+                    "top_movie": None
+                },
+                "revenue_by_day": [],
+                "revenue_by_movie": [],
+                "occupancy_by_showtime": [],
+                "recent_bookings": []
             }
         }
 
