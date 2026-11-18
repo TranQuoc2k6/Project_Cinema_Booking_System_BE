@@ -86,6 +86,24 @@ def seed_users(db):
             "avatar": "https://images.unsplash.com/photo-1494790108377-be9c29b29330",
             "is_active": True,
         },
+        {
+            "role_id": 2,
+            "full_name": "Nguyen Minh Hoang",
+            "email": "hoang.nguyen@cinema.com",
+            "phone": "0933221100",
+            "password_hash": hash_password("user123"),
+            "avatar": "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde",
+            "is_active": True,
+        },
+        {
+            "role_id": 2,
+            "full_name": "Pham Van Spam (Tai khoan bi khoa)",
+            "email": "spam.bot@cinema.com",
+            "phone": "0911223344",
+            "password_hash": hash_password("user123"),
+            "avatar": "https://images.unsplash.com/photo-1570295999919-56ceb5ecca61",
+            "is_active": False,
+        },
     ]
 
     for u in users_data:
