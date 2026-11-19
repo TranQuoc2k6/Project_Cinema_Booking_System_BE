@@ -40,6 +40,11 @@ class ChangePasswordRequest(BaseModel):
     new_password: str = Field(..., min_length=6, description="Mật khẩu mới (tối thiểu 6 ký tự)")
 
 
+# Schema cập nhật trạng thái Người dùng (Khóa / Mở khóa tài khoản cho Admin)
+class UserStatusUpdate(BaseModel):
+    is_active: Optional[bool] = Field(None, description="Trạng thái tài khoản (True: Hoạt động, False: Bị khóa)")
+
+
 # Schema phản hồi thông tin Người dùng (Ẩn password_hash)
 class UserResponse(UserBase):
     id: int

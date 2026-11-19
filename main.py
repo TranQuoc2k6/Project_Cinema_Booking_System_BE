@@ -29,8 +29,8 @@ app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 app.include_router(movies.router)
 app.include_router(auth.router)
 app.include_router(auth.router, prefix="/api/auth", include_in_schema=False)  # Alias tương thích
-app.include_router(admin.router, prefix="/api/admin", tags=["Admin Portal"])
-app.include_router(admin.router, prefix="/admin", tags=["Admin Portal"], include_in_schema=False)  # Alias tương thích
+app.include_router(admin.router, prefix="/api/admin")
+app.include_router(admin.router, prefix="/admin", include_in_schema=False)  # Alias tương thích
 app.include_router(seats.router)
 app.include_router(showtimes.router)
 app.include_router(cinemas.router)
