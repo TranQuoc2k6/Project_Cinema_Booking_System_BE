@@ -1,6 +1,7 @@
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 
+from fastapi import HTTPException, status
 from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
@@ -12,6 +13,10 @@ from app.models.room import Room
 from app.models.seat import Seat
 from app.models.showtime import Showtime
 from app.schemas.showtime import (
+    AdminShowtimeCreate,
+    AdminShowtimeListResponse,
+    AdminShowtimeResponse,
+    AdminShowtimeUpdate,
     CinemaShowtimesResponse,
     SeatStatusItem,
     ShowtimeDetailResponse,
@@ -19,6 +24,8 @@ from app.schemas.showtime import (
     ShowtimeSeatMapResponse,
 )
 
+# Thời gian dọn phòng sau mỗi suất chiếu (phút)
+CLEANING_BUFFER_MINUTES = 15
 
 # Hệ số nhân giá theo loại ghế
 SEAT_PRICE_MULTIPLIER: dict[str, Decimal] = {
@@ -232,3 +239,391 @@ def get_showtime_seat_map(
         available_seats=sum(1 for s in seat_items if s.status == "available"),
         rows={row: seats_in_row for row, seats_in_row in rows_map.items()},
     )
+
+
+# ============================================================================
+# ADMIN SHOWTIMES MANAGEMENT & CONFLICT CHECKING (SRS / Task)
+# ============================================================================
+
+def check_showtime_conflict(
+    db: Session,
+    room_id: int,
+    start_time: datetime,
+    end_time: datetime,
+    exclude_showtime_id: int | None = None,
+) -> Showtime | None:
+    """
+    Kiểm tra xung đột trùng giờ chiếu trong cùng phòng (Room).
+    Quy tắc: Thời lượng phim + 15 phút dọn phòng.
+    Khoảng thời gian phòng bị chiếm dụng là [start_time, end_time + 15 phút).
+    Hai suất chiếu A và B bị trùng nếu:
+        A.start_time < B.end_time + 15 phút  AND  A.end_time + 15 phút > B.start_time
+    tức là:
+        exist.start_time < candidate.end_time + 15 phút  AND  exist.end_time > candidate.start_time - 15 phút
+    """
+    cleaning_buffer = timedelta(minutes=CLEANING_BUFFER_MINUTES)
+    candidate_end_buffer = end_time + cleaning_buffer
+    candidate_start_buffer = start_time - cleaning_buffer
+
+    query = (
+        db.query(Showtime)
+        .join(Movie, Showtime.movie_id == Movie.id)
+        .filter(
+            Showtime.room_id == room_id,
+            Showtime.start_time < candidate_end_buffer,
+            Showtime.end_time > candidate_start_buffer,
+        )
+    )
+    if exclude_showtime_id is not None:
+        query = query.filter(Showtime.id != exclude_showtime_id)
+
+    return query.first()
+
+
+def format_admin_showtime_response(
+    showtime: Showtime,
+    movie: Movie,
+    room: Room,
+    cinema: Cinema,
+    total_bookings: int = 0,
+) -> AdminShowtimeResponse:
+    now = datetime.now()
+    if showtime.start_time > now:
+        st_status = "upcoming"
+    elif showtime.end_time < now:
+        st_status = "finished"
+    else:
+        st_status = "ongoing"
+
+    return AdminShowtimeResponse(
+        id=showtime.id,
+        movie_id=movie.id,
+        movie_title=movie.title,
+        poster_url=movie.poster_url or "",
+        duration_minutes=movie.duration_minutes or 120,
+        cinema_id=cinema.id,
+        cinema_name=cinema.name,
+        city=cinema.city,
+        room_id=room.id,
+        room_name=room.name,
+        room_type=room.room_type or "2D",
+        start_time=showtime.start_time,
+        end_time=showtime.end_time,
+        price=showtime.price,
+        status=st_status,
+        total_bookings=total_bookings,
+    )
+
+
+def raise_conflict_error(conflict: Showtime, room_name: str | None = None):
+    c_movie_title = conflict.movie.title if conflict.movie else f"Phim #{conflict.movie_id}"
+    c_start = conflict.start_time.strftime("%H:%M ngày %d/%m/%Y")
+    c_end = conflict.end_time.strftime("%H:%M")
+    c_clean_end = (conflict.end_time + timedelta(minutes=CLEANING_BUFFER_MINUTES)).strftime("%H:%M")
+    room_txt = f" tại phòng '{room_name}'" if room_name else ""
+    raise HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail=(
+            f"Trùng lịch chiếu! Phòng chiếu{room_txt} đã có suất chiếu '{c_movie_title}' "
+            f"từ {c_start} đến {c_end} (kèm 15 phút dọn phòng đến {c_clean_end}). "
+            f"Vui lòng chọn khung giờ khác!"
+        ),
+    )
+
+
+def admin_get_showtimes(
+    db: Session,
+    page: int = 1,
+    limit: int = 50,
+    movie_id: int | None = None,
+    cinema_id: int | None = None,
+    room_id: int | None = None,
+    date_str: str | None = None,
+    search: str | None = None,
+    status_filter: str | None = None,
+) -> AdminShowtimeListResponse:
+    query = (
+        db.query(Showtime, Movie, Room, Cinema)
+        .join(Movie, Showtime.movie_id == Movie.id)
+        .join(Room, Showtime.room_id == Room.id)
+        .join(Cinema, Room.cinema_id == Cinema.id)
+    )
+
+    if movie_id:
+        query = query.filter(Showtime.movie_id == movie_id)
+    if room_id:
+        query = query.filter(Showtime.room_id == room_id)
+    if cinema_id:
+        query = query.filter(Room.cinema_id == cinema_id)
+
+    if date_str and date_str.strip() and date_str.strip().lower() != "all":
+        try:
+            target_date = datetime.strptime(date_str.strip(), "%Y-%m-%d").date()
+            day_start = datetime.combine(target_date, time.min)
+            day_end = day_start + timedelta(days=1)
+            query = query.filter(
+                Showtime.start_time >= day_start,
+                Showtime.start_time < day_end,
+            )
+        except ValueError:
+            pass
+
+    if search and search.strip():
+        term = f"%{search.strip()}%"
+        query = query.filter(
+            (Movie.title.ilike(term)) | (Cinema.name.ilike(term)) | (Room.name.ilike(term))
+        )
+
+    now = datetime.now()
+    if status_filter:
+        s = status_filter.strip().lower()
+        if s == "upcoming":
+            query = query.filter(Showtime.start_time > now)
+        elif s == "ongoing":
+            query = query.filter(Showtime.start_time <= now, Showtime.end_time >= now)
+        elif s == "finished":
+            query = query.filter(Showtime.end_time < now)
+
+    total = query.count()
+    rows = (
+        query.order_by(Showtime.start_time.desc())
+        .offset((page - 1) * limit)
+        .limit(limit)
+        .all()
+    )
+
+    items = []
+    for showtime, movie, room, cinema in rows:
+        booking_count = (
+            db.query(Booking)
+            .filter(
+                Booking.showtime_id == showtime.id,
+                Booking.status.in_(["DA_THANH_TOAN", "GIU_CHO", "CONFIRMED", "PENDING"]),
+            )
+            .count()
+        )
+        items.append(format_admin_showtime_response(showtime, movie, room, cinema, booking_count))
+
+    total_pages = max(1, (total + limit - 1) // limit) if total > 0 else 1
+    return AdminShowtimeListResponse(
+        total=total,
+        page=page,
+        limit=limit,
+        total_pages=total_pages,
+        items=items,
+    )
+
+
+def admin_get_showtime_by_id(db: Session, showtime_id: int) -> AdminShowtimeResponse:
+    row = (
+        db.query(Showtime, Movie, Room, Cinema)
+        .join(Movie, Showtime.movie_id == Movie.id)
+        .join(Room, Showtime.room_id == Room.id)
+        .join(Cinema, Room.cinema_id == Cinema.id)
+        .filter(Showtime.id == showtime_id)
+        .first()
+    )
+    if not row:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Không tìm thấy suất chiếu với ID {showtime_id}",
+        )
+    showtime, movie, room, cinema = row
+    booking_count = (
+        db.query(Booking)
+        .filter(
+            Booking.showtime_id == showtime.id,
+            Booking.status.in_(["DA_THANH_TOAN", "GIU_CHO", "CONFIRMED", "PENDING"]),
+        )
+        .count()
+    )
+    return format_admin_showtime_response(showtime, movie, room, cinema, booking_count)
+
+
+def admin_create_showtime(db: Session, showtime_in: AdminShowtimeCreate) -> AdminShowtimeResponse:
+    # 1. Kiểm tra tồn tại phim
+    movie = db.query(Movie).filter(Movie.id == showtime_in.movie_id).first()
+    if not movie:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Không tìm thấy tác phẩm phim với ID {showtime_in.movie_id}",
+        )
+
+    # 2. Kiểm tra tồn tại phòng chiếu
+    room = db.query(Room).filter(Room.id == showtime_in.room_id).first()
+    if not room:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Không tìm thấy phòng chiếu với ID {showtime_in.room_id}",
+        )
+
+    # 3. Tính toán và validate thời lượng kết thúc
+    duration = movie.duration_minutes or 120
+    min_end_time = showtime_in.start_time + timedelta(minutes=duration)
+
+    if showtime_in.end_time is None:
+        end_time = min_end_time
+    else:
+        if showtime_in.end_time < min_end_time:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    f"Thời gian kết thúc không hợp lệ! Phim '{movie.title}' có thời lượng {duration} phút, "
+                    f"do đó suất chiếu kết thúc sớm nhất lúc {min_end_time.strftime('%H:%M %d/%m/%Y')}."
+                ),
+            )
+        end_time = showtime_in.end_time
+
+    # 4. Kiểm tra xung đột chặn trùng giờ (thời lượng phim + 15 phút dọn phòng)
+    conflict = check_showtime_conflict(
+        db=db,
+        room_id=showtime_in.room_id,
+        start_time=showtime_in.start_time,
+        end_time=end_time,
+    )
+    if conflict:
+        raise_conflict_error(conflict, room.name)
+
+    # 5. Lưu suất chiếu
+    price = showtime_in.price if showtime_in.price is not None else Decimal("95000.00")
+    if price <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Giá vé cơ bản phải lớn hơn 0 VND.",
+        )
+
+    new_showtime = Showtime(
+        movie_id=movie.id,
+        room_id=room.id,
+        start_time=showtime_in.start_time,
+        end_time=end_time,
+        price=price,
+    )
+    db.add(new_showtime)
+    db.commit()
+    db.refresh(new_showtime)
+
+    cinema = db.query(Cinema).filter(Cinema.id == room.cinema_id).first()
+    return format_admin_showtime_response(new_showtime, movie, room, cinema, 0)
+
+
+def admin_update_showtime(
+    db: Session,
+    showtime_id: int,
+    showtime_in: AdminShowtimeUpdate,
+) -> AdminShowtimeResponse:
+    showtime = db.query(Showtime).filter(Showtime.id == showtime_id).first()
+    if not showtime:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Không tìm thấy suất chiếu với ID {showtime_id}",
+        )
+
+    target_movie_id = showtime_in.movie_id if showtime_in.movie_id is not None else showtime.movie_id
+    target_room_id = showtime_in.room_id if showtime_in.room_id is not None else showtime.room_id
+    target_start_time = showtime_in.start_time if showtime_in.start_time is not None else showtime.start_time
+
+    movie = db.query(Movie).filter(Movie.id == target_movie_id).first()
+    if not movie:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Không tìm thấy tác phẩm phim với ID {target_movie_id}",
+        )
+
+    room = db.query(Room).filter(Room.id == target_room_id).first()
+    if not room:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Không tìm thấy phòng chiếu với ID {target_room_id}",
+        )
+
+    duration = movie.duration_minutes or 120
+    min_end_time = target_start_time + timedelta(minutes=duration)
+
+    if showtime_in.end_time is not None:
+        if showtime_in.end_time < min_end_time:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    f"Thời gian kết thúc không hợp lệ! Phim '{movie.title}' có thời lượng {duration} phút, "
+                    f"do đó suất chiếu kết thúc sớm nhất lúc {min_end_time.strftime('%H:%M %d/%m/%Y')}."
+                ),
+            )
+        target_end_time = showtime_in.end_time
+    elif showtime_in.start_time is not None or showtime_in.movie_id is not None:
+        target_end_time = min_end_time
+    else:
+        target_end_time = showtime.end_time
+
+    # Kiểm tra trùng giờ chiếu trong cùng phòng (loại trừ chính suất chiếu đang sửa)
+    conflict = check_showtime_conflict(
+        db=db,
+        room_id=target_room_id,
+        start_time=target_start_time,
+        end_time=target_end_time,
+        exclude_showtime_id=showtime_id,
+    )
+    if conflict:
+        raise_conflict_error(conflict, room.name)
+
+    showtime.movie_id = target_movie_id
+    showtime.room_id = target_room_id
+    showtime.start_time = target_start_time
+    showtime.end_time = target_end_time
+
+    if showtime_in.price is not None:
+        if showtime_in.price <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Giá vé cơ bản phải lớn hơn 0 VND.",
+            )
+        showtime.price = showtime_in.price
+
+    db.commit()
+    db.refresh(showtime)
+
+    booking_count = (
+        db.query(Booking)
+        .filter(
+            Booking.showtime_id == showtime.id,
+            Booking.status.in_(["DA_THANH_TOAN", "GIU_CHO", "CONFIRMED", "PENDING"]),
+        )
+        .count()
+    )
+    cinema = db.query(Cinema).filter(Cinema.id == room.cinema_id).first()
+    return format_admin_showtime_response(showtime, movie, room, cinema, booking_count)
+
+
+def admin_delete_showtime(db: Session, showtime_id: int, force: bool = False):
+    showtime = db.query(Showtime).filter(Showtime.id == showtime_id).first()
+    if not showtime:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Không tìm thấy suất chiếu với ID {showtime_id}",
+        )
+
+    # Kiểm tra các đơn vé đã thanh toán
+    paid_count = (
+        db.query(Booking)
+        .filter(
+            Booking.showtime_id == showtime_id,
+            Booking.status.in_(["DA_THANH_TOAN", "CONFIRMED"]),
+        )
+        .count()
+    )
+    if paid_count > 0 and not force:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Không thể hủy/xóa suất chiếu #{showtime_id} vì đã có {paid_count} vé được thanh toán. "
+                f"Vui lòng hủy vé hoặc liên hệ hoàn tiền trước khi xóa!"
+            ),
+        )
+
+    db.delete(showtime)
+    db.commit()
+    return {
+        "status": "success",
+        "message": f"Đã hủy và xóa thành công suất chiếu #{showtime_id} khỏi hệ thống.",
+    }
+
