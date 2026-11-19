@@ -23,6 +23,7 @@ from app.schemas.showtime import (
     ShowtimeListingItem,
     ShowtimeSeatMapResponse,
 )
+from app.services.booking_service import clean_expired_holds
 
 # Thời gian dọn phòng sau mỗi suất chiếu (phút)
 CLEANING_BUFFER_MINUTES = 15
@@ -158,10 +159,13 @@ def get_showtime_seat_map(
     cho một suất chiếu cụ thể.
 
     Quy tắc trạng thái:
-      - booked  : booking.status == 'CONFIRMED'
-      - held    : booking.status == 'PENDING'
-      - available: không có booking nào hoặc booking đã CANCELLED
+      - booked  : booking.status in ('CONFIRMED', 'DA_THANH_TOAN')
+      - held    : booking.status in ('PENDING', 'GIU_CHO')
+      - available: không có booking nào hoặc booking đã CANCELLED / HET_HAN
     """
+    # 0. Tự động giải phóng các ghế giữ chỗ quá hạn 10 phút trước khi tính toán
+    clean_expired_holds(db)
+
     # 1. Kiểm tra suất chiếu tồn tại
     showtime: Showtime | None = (
         db.query(Showtime).filter(Showtime.id == showtime_id).first()
@@ -180,8 +184,8 @@ def get_showtime_seat_map(
     )
 
     # 3. Truy vấn trạng thái ghế cho suất chiếu này
-    #    Chỉ quan tâm booking PENDING hoặc CONFIRMED (bỏ CANCELLED)
-    active_statuses = ("PENDING", "CONFIRMED")
+    #    Chỉ quan tâm booking PENDING, GIU_CHO, CONFIRMED, DA_THANH_TOAN
+    active_statuses = ("PENDING", "CONFIRMED", "GIU_CHO", "DA_THANH_TOAN")
     occupied: dict[int, str] = {}  # seat_id -> booking status
 
     rows_with_status = (
@@ -194,9 +198,9 @@ def get_showtime_seat_map(
         .all()
     )
     for seat_id, booking_status in rows_with_status:
-        # Nếu một ghế có nhiều booking (edge case), ưu tiên CONFIRMED
+        # Nếu một ghế có nhiều booking (edge case), ưu tiên trạng thái đã thanh toán / confirmed
         existing = occupied.get(seat_id)
-        if existing != "CONFIRMED":
+        if existing not in ("CONFIRMED", "DA_THANH_TOAN"):
             occupied[seat_id] = booking_status
 
     # 4. Xây dựng danh sách ghế kèm trạng thái & giá
@@ -207,9 +211,9 @@ def get_showtime_seat_map(
         price = (base_price * multiplier).quantize(Decimal("0.01"))
 
         raw_status = occupied.get(seat.id)
-        if raw_status == "CONFIRMED":
+        if raw_status in ("CONFIRMED", "DA_THANH_TOAN"):
             status = "booked"
-        elif raw_status == "PENDING":
+        elif raw_status in ("PENDING", "GIU_CHO"):
             status = "held"
         else:
             status = "available"

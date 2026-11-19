@@ -6,7 +6,14 @@ from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_current_user, get_db
 from app.models.user import User
-from app.schemas.booking import BookingHoldRequest, BookingHoldResponse, MyTicketResponse
+from app.schemas.booking import (
+    BookingConfirmRequest,
+    BookingConfirmResponse,
+    BookingHoldRequest,
+    BookingHoldResponse,
+    CleanExpiredResponse,
+    MyTicketResponse,
+)
 from app.services import booking_service
 
 router = APIRouter(prefix="/api/bookings", tags=["Bookings"])
@@ -36,6 +43,66 @@ def hold_seats(
         db=db,
     )
     return booking
+
+
+@router.post(
+    "/{booking_id}/confirm",
+    response_model=BookingConfirmResponse,
+    summary="Xác nhận đặt vé từ ghế đang giữ (Task T3C6CE6)",
+    description="Xác nhận đặt vé từ ghế đang giữ, tính lại tiền ở server; tự chuyển giữ chỗ quá hạn sang HET_HAN để trả ghế.",
+)
+def confirm_booking_by_id(
+    booking_id: int,
+    payload: BookingConfirmRequest | None = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """API xác nhận đặt vé theo ID đơn vé trong URL"""
+    payment_method = payload.payment_method if payload else "MOMO"
+    transaction_id = payload.transaction_id if payload else None
+    return booking_service.confirm_booking(
+        db=db,
+        user=current_user,
+        booking_id=booking_id,
+        payment_method=payment_method,
+        transaction_id=transaction_id,
+    )
+
+
+@router.post(
+    "/confirm",
+    response_model=BookingConfirmResponse,
+    summary="Xác nhận đặt vé bằng payload (Task T3C6CE6)",
+    description="Hỗ trợ xác nhận đặt vé truyền qua body JSON (booking_id hoặc booking_code).",
+)
+def confirm_booking_by_payload(
+    payload: BookingConfirmRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """API xác nhận đặt vé qua Body JSON"""
+    return booking_service.confirm_booking(
+        db=db,
+        user=current_user,
+        booking_id=payload.booking_id,
+        booking_code=payload.booking_code,
+        payment_method=payload.payment_method or "MOMO",
+        transaction_id=payload.transaction_id,
+    )
+
+
+@router.post(
+    "/clean-expired",
+    response_model=CleanExpiredResponse,
+    summary="Tự động hủy giữ chỗ quá hạn để trả ghế (Task T3C6CE6)",
+    description="Quét toàn bộ đơn giữ chỗ (GIU_CHO/PENDING) đã quá hạn held_until, chuyển sang HET_HAN và giải phóng ghế trả về trạng thái trống.",
+)
+def trigger_clean_expired(
+    db: Session = Depends(get_db),
+):
+    """API dọn dẹp và giải phóng các ghế giữ chỗ quá hạn 10 phút"""
+    return booking_service.clean_expired_holds(db=db)
+
 
 
 @router.get(
