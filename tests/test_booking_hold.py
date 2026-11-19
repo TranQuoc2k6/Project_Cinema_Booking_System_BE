@@ -5,8 +5,13 @@ import pytest
 from datetime import datetime, timedelta
 from decimal import Decimal
 
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from fastapi.testclient import TestClient
-from app.main import app
+from main import app
 from app.core.dependencies import get_current_user, get_db
 from app.models.booking import Booking
 from app.models.booking_seat import BookingSeat
