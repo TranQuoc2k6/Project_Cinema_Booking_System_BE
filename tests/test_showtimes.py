@@ -3,10 +3,17 @@ Unit tests cho T3C68E8: GET /api/showtimes/{id}/seats
 Kiểm tra logic phân loại trạng thái ghế và tính giá.
 """
 
-import pytest
+import os
+import sys
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+import pytest
+from app.models.booking_seat import BookingSeat
+from app.models.seat import Seat
+from app.models.showtime import Showtime
 from app.services.showtime_service import get_showtime_seat_map, SEAT_PRICE_MULTIPLIER
 
 
@@ -30,12 +37,13 @@ def _make_showtime(showtime_id=1, room_id=10, price="100000.00"):
     st.id = showtime_id
     st.room_id = room_id
     st.price = Decimal(price)
+    st.start_time = None
     return st
 
 
 def _build_db(showtime, seats, occupied_rows):
     """
-    Xây dựng mock DB session trả về đúng kết quả cho từng query.
+    Xây dựng mock DB session trả về đúng kết quả theo từng model được query.
     occupied_rows: list of (seat_id, booking_status)
     """
     db = MagicMock()
@@ -52,11 +60,23 @@ def _build_db(showtime, seats, occupied_rows):
     q_bs = MagicMock()
     q_bs.join.return_value.all.return_value = occupied_rows
 
-    # side_effect as a list: each call to db.query() consumes the next item
-    call_results = [q_showtime, q_seats, q_bs]
-    _iter = iter(call_results)
-    db.query.side_effect = lambda *args, **kwargs: next(_iter)
+    def mock_query(*args, **kwargs):
+        if not args:
+            return MagicMock()
+        target = args[0]
+        if target is Showtime:
+            return q_showtime
+        elif target is Seat:
+            return q_seats
+        elif target is BookingSeat or (len(args) > 1 and args[0] == BookingSeat.seat_id):
+            return q_bs
+        # Fallback for clean_expired_holds (db.query(Booking))
+        dummy = MagicMock()
+        dummy.filter.return_value.all.return_value = []
+        dummy.filter.return_value.delete.return_value = 0
+        return dummy
 
+    db.query.side_effect = mock_query
     return db
 
 

@@ -39,7 +39,6 @@ def override_get_db():
         db.close()
 
 
-app.dependency_overrides[get_db] = override_get_db
 client = TestClient(app)
 
 
@@ -131,6 +130,7 @@ class TestAdminShowtimesAPI(unittest.TestCase):
 
     def tearDown(self):
         Base.metadata.drop_all(bind=engine)
+        app.dependency_overrides.clear()
 
     def test_create_showtime_success(self):
         start = (datetime.now() + timedelta(days=1)).replace(hour=10, minute=0, second=0, microsecond=0)

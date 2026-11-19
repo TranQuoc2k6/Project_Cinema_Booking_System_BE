@@ -198,5 +198,39 @@ class ShowtimeSeatMapResponse(BaseModel):
     base_price: Decimal = Field(..., ge=0, max_digits=10, decimal_places=2)
     total_seats: int
     available_seats: int
+    # Thông tin phụ thu khung giờ & cuối tuần
+    is_weekend: bool = False
+    is_peak_hour: bool = False
+    weekend_surcharge: Decimal = Decimal("0.00")
+    peak_hour_surcharge: Decimal = Decimal("0.00")
+    pricing_breakdown: dict | None = None
     # Ghế được nhóm theo hàng (key: tên hàng A, B, C...)
     rows: dict[str, list[SeatStatusItem]]
+
+
+# ---------------------------------------------------------------------------
+# Pricing Configuration Schemas (Cấu hình giá theo loại ghế & khung giờ)
+# ---------------------------------------------------------------------------
+
+class PricingConfigUpdate(BaseModel):
+    seat_multipliers: dict[str, Decimal] | None = Field(None, description="Hệ số nhân theo loại ghế (standard, vip, couple)")
+    seat_type_surcharges: dict[str, Decimal] | None = Field(None, description="Phụ thu cố định theo loại ghế (VND)")
+    weekend_surcharge: Decimal | None = Field(None, ge=0, description="Phụ thu ngày cuối tuần (VND)")
+    peak_hour_surcharge: Decimal | None = Field(None, ge=0, description="Phụ thu khung giờ vàng (VND)")
+    peak_hour_start: str | None = Field(None, description="Giờ bắt đầu khung giờ vàng (HH:MM)")
+    peak_hour_end: str | None = Field(None, description="Giờ kết thúc khung giờ vàng (HH:MM)")
+    weekend_days: list[int] | None = Field(None, description="Danh sách các ngày cuối tuần (0=Mon, 5=Sat, 6=Sun)")
+    include_friday_evening: bool | None = Field(None, description="Bao gồm tối thứ 6 là cuối tuần")
+    friday_evening_start_hour: int | None = Field(None, ge=0, le=23, description="Giờ bắt đầu tính cuối tuần cho tối thứ 6")
+
+
+class PricingConfigResponse(BaseModel):
+    seat_multipliers: dict[str, float]
+    seat_type_surcharges: dict[str, float]
+    weekend_surcharge: float
+    peak_hour_surcharge: float
+    peak_hour_start: str
+    peak_hour_end: str
+    weekend_days: list[int]
+    include_friday_evening: bool
+    friday_evening_start_hour: int
