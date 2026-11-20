@@ -346,9 +346,102 @@ def confirm_booking(
 
 
 
+def format_ticket_response(b: Booking, now: Optional[datetime] = None) -> Dict[str, Any]:
+    """Helper định dạng chi tiết vé điện tử đầy đủ kèm cờ hủy vé (Task T3C6D1A)."""
+    if now is None:
+        now = datetime.utcnow()
+    st = b.showtime
+    movie = st.movie if st else None
+    room = st.room if st else None
+    cinema = room.cinema if room else None
+
+    # Xác định trạng thái thanh toán hiển thị
+    if b.status == "DA_THANH_TOAN":
+        payment_status = "PAID"
+    elif b.status == "GIU_CHO":
+        payment_status = "PENDING"
+    elif b.status == "DA_HUY":
+        payment_status = "CANCELLED"
+    else:
+        payment_status = "EXPIRED"
+
+    # Kiểm tra điều kiện huỷ vé (Task T3C6D1A: khách huỷ vé trước giờ chiếu ít nhất 2 tiếng)
+    st_start = st.start_time if (st and isinstance(st.start_time, datetime)) else None
+    cancel_deadline = (st_start - timedelta(hours=2)) if st_start else None
+    can_cancel = False
+    cancel_reason = None
+
+    ref_now = now
+    if st_start and st_start.tzinfo is not None:
+        ref_now = datetime.now(st_start.tzinfo)
+
+    if b.status in ("DA_THANH_TOAN", "GIU_CHO"):
+        if cancel_deadline and ref_now <= cancel_deadline:
+            can_cancel = True
+        else:
+            if cancel_deadline and ref_now > cancel_deadline:
+                if st_start and st_start <= ref_now:
+                    cancel_reason = "Suất chiếu đã bắt đầu hoặc đã qua"
+                else:
+                    cancel_reason = "Đã quá hạn hủy (chỉ hủy được trước giờ chiếu ít nhất 2 tiếng)"
+            else:
+                cancel_reason = "Không xác định được thời gian suất chiếu"
+    elif b.status == "DA_HUY":
+        cancel_reason = "Vé đã được hủy"
+    elif b.status == "HET_HAN":
+        cancel_reason = "Đơn giữ chỗ đã hết hạn"
+
+    # Danh sách ghế
+    seats_data = []
+    for bs in b.booking_seats:
+        seat_obj = bs.seat
+        seats_data.append({
+            "id": bs.id,
+            "seat_id": bs.seat_id,
+            "seat_number": seat_obj.seat_number if seat_obj else f"Ghế {bs.seat_id}",
+            "seat_row": seat_obj.seat_row if seat_obj else None,
+            "seat_column": seat_obj.seat_column if seat_obj else None,
+            "seat_type": seat_obj.seat_type if seat_obj else "standard",
+            "price": bs.price,
+        })
+
+    return {
+        "id": b.id,
+        "booking_code": b.booking_code,
+        "status": b.status,
+        "payment_status": payment_status,
+        "total_price": b.total_price,
+        "held_until": b.held_until,
+        "created_at": b.created_at,
+        "showtime": {
+            "id": st.id if st else 0,
+            "start_time": st.start_time if st else now,
+            "end_time": st.end_time if st else now,
+            "room_name": room.name if room else "Phòng chiếu",
+            "room_type": room.room_type if room else "2D",
+            "cinema": {
+                "id": cinema.id if cinema else 0,
+                "name": cinema.name if cinema else "Rạp chiếu phim",
+                "address": cinema.address if cinema else None,
+                "city": cinema.city if cinema else None,
+            },
+            "movie": {
+                "id": movie.id if movie else 0,
+                "title": movie.title if movie else "Tên phim",
+                "poster_url": movie.poster_url if movie else None,
+                "duration_minutes": movie.duration_minutes if movie else 120,
+            },
+        },
+        "seats": seats_data,
+        "can_cancel": can_cancel,
+        "cancel_deadline": cancel_deadline,
+        "cancel_reason": cancel_reason,
+    }
+
+
 def get_user_bookings(user_id: int, status_filter: str | None, db: Session) -> list:
     """
-    Lấy danh sách vé đã đặt của user (Task T3C5D0B).
+    Lấy danh sách vé đã đặt của user (Task T3C5D0B & T3C6D1A).
     status_filter có thể là:
       - 'upcoming' (Sắp chiếu: status=DA_THANH_TOAN hoặc GIU_CHO và showtime.start_time > now)
       - 'watched'  (Đã xem: status=DA_THANH_TOAN và showtime.end_time <= now)
@@ -377,20 +470,6 @@ def get_user_bookings(user_id: int, status_filter: str | None, db: Session) -> l
         if not st:
             continue
 
-        movie = st.movie
-        room = st.room
-        cinema = room.cinema if room else None
-
-        # Xác định trạng thái thanh toán hiển thị
-        if b.status == "DA_THANH_TOAN":
-            payment_status = "PAID"
-        elif b.status == "GIU_CHO":
-            payment_status = "PENDING"
-        elif b.status == "DA_HUY":
-            payment_status = "CANCELLED"
-        else:
-            payment_status = "EXPIRED"
-
         # Phân loại tab
         # 1. 'upcoming': Suất chiếu sắp tới & chưa hủy/hết hạn
         is_upcoming = (b.status in ("DA_THANH_TOAN", "GIU_CHO")) and (st.start_time > now)
@@ -406,51 +485,162 @@ def get_user_bookings(user_id: int, status_filter: str | None, db: Session) -> l
         elif status_filter == "cancelled" and not is_cancelled:
             continue
 
-        # Danh sách ghế
-        seats_data = []
-        for bs in b.booking_seats:
-            seat_obj = bs.seat
-            seats_data.append({
-                "id": bs.id,
-                "seat_id": bs.seat_id,
-                "seat_number": seat_obj.seat_number if seat_obj else f"Ghế {bs.seat_id}",
-                "seat_row": seat_obj.seat_row if seat_obj else None,
-                "seat_column": seat_obj.seat_column if seat_obj else None,
-                "seat_type": seat_obj.seat_type if seat_obj else "standard",
-                "price": bs.price,
-            })
-
-        result.append({
-            "id": b.id,
-            "booking_code": b.booking_code,
-            "status": b.status,
-            "payment_status": payment_status,
-            "total_price": b.total_price,
-            "held_until": b.held_until,
-            "created_at": b.created_at,
-            "showtime": {
-                "id": st.id,
-                "start_time": st.start_time,
-                "end_time": st.end_time,
-                "room_name": room.name if room else "Phòng chiếu",
-                "room_type": room.room_type if room else "2D",
-                "cinema": {
-                    "id": cinema.id if cinema else 0,
-                    "name": cinema.name if cinema else "Rạp chiếu phim",
-                    "address": cinema.address if cinema else None,
-                    "city": cinema.city if cinema else None,
-                },
-                "movie": {
-                    "id": movie.id if movie else 0,
-                    "title": movie.title if movie else "Tên phim",
-                    "poster_url": movie.poster_url if movie else None,
-                    "duration_minutes": movie.duration_minutes if movie else 120,
-                },
-            },
-            "seats": seats_data,
-        })
+        result.append(format_ticket_response(b, now))
 
     return result
+
+
+def user_cancel_booking(db: Session, user: User, booking_id: int) -> Dict[str, Any]:
+    """
+    Khách hàng hủy vé xem phim và giải phóng ghế (Task T3C6D1A).
+    
+    Quy định:
+      - Khách hủy được vé trước giờ chiếu 2 tiếng (trả ghế).
+      - Đơn vé phải thuộc sở hữu của chính khách hàng đó.
+      - Vé chưa bị hủy trước đó hoặc chưa hết hạn giữ chỗ.
+      
+    Hành động:
+      1. Kiểm tra quyền sở hữu & trạng thái vé.
+      2. Kiểm tra chênh lệch thời gian: start_time - now >= 2 giờ.
+      3. Thu thập tên các ghế và xóa các bản ghi BookingSeat (trả ghế).
+      4. Cập nhật booking.status sang 'DA_HUY', held_until = None, updated_at = now.
+      5. Cập nhật Payment sang 'refunded' (nếu đã paid) hoặc 'cancelled'.
+      6. Commit và trả về kết quả.
+    """
+    now = datetime.utcnow()
+    booking = db.query(Booking).filter(Booking.id == booking_id).first()
+    if not booking:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Không tìm thấy đơn vé với ID #{booking_id}"
+        )
+
+    # 1. Kiểm tra quyền sở hữu vé
+    if booking.user_id != user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Bạn không có quyền thao tác trên đơn vé này."
+        )
+
+    # 2. Kiểm tra trạng thái vé
+    current_status = (booking.status or "").upper()
+    if current_status in ["DA_HUY", "CANCELLED"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Đơn vé này đã được hủy trước đó."
+        )
+    if current_status in ["HET_HAN", "EXPIRED"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Đơn giữ chỗ đã hết hạn, không thể thực hiện hủy vé."
+        )
+
+    # 3. Kiểm tra điều kiện thời gian: trước giờ chiếu ít nhất 2 tiếng (Task T3C6D1A)
+    st = booking.showtime
+    if not st or not st.start_time:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Suất chiếu không hợp lệ hoặc không xác định được thời gian bắt đầu."
+        )
+
+    ref_now = now
+    if st.start_time.tzinfo is not None:
+        ref_now = datetime.now(st.start_time.tzinfo)
+
+    cancellation_deadline = st.start_time - timedelta(hours=2)
+    if ref_now > cancellation_deadline:
+        diff = st.start_time - ref_now
+        if diff.total_seconds() <= 0:
+            time_msg = "Suất chiếu đã bắt đầu hoặc đã kết thúc"
+        else:
+            minutes_left = max(0, int(diff.total_seconds() // 60))
+            hours_left = minutes_left // 60
+            mins = minutes_left % 60
+            time_msg = f"Chỉ còn {hours_left}h{mins:02d}m nữa là đến giờ chiếu"
+
+        deadline_str = cancellation_deadline.strftime("%H:%M ngày %d/%m/%Y")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Chỉ có thể hủy vé trước giờ chiếu ít nhất 2 tiếng ({time_msg}). "
+                f"Thời hạn hủy vé cho suất chiếu này đã kết thúc lúc {deadline_str}."
+            )
+        )
+
+    # 4. Thu thập thông tin các ghế để giải phóng
+    released_seats = []
+    for bs in booking.booking_seats:
+        s_name = bs.seat.seat_number if bs.seat else f"ID {bs.seat_id}"
+        released_seats.append(s_name)
+
+    # 5. Xóa BookingSeat để giải phóng UNIQUE constraint ghế trong suất chiếu (trả ghế)
+    db.query(BookingSeat).filter(BookingSeat.booking_id == booking.id).delete(synchronize_session=False)
+
+    # 6. Cập nhật trạng thái Booking sang DA_HUY
+    booking.status = "DA_HUY"
+    booking.held_until = None
+    booking.updated_at = now
+
+    # 7. Cập nhật các bản ghi Payment tương ứng
+    for p in booking.payments:
+        if (p.status or "").lower() in ["success", "paid", "completed"]:
+            p.status = "refunded"
+        else:
+            p.status = "cancelled"
+
+    db.commit()
+    db.refresh(booking)
+
+    seat_info = ", ".join(released_seats) if released_seats else "Không có ghế"
+    return {
+        "success": True,
+        "message": f"Đã hủy thành công đơn vé #{booking.booking_code}! Ghế [{seat_info}] đã được giải phóng và trả lại hệ thống.",
+        "booking_id": booking.id,
+        "booking_code": booking.booking_code,
+        "new_status": "DA_HUY",
+        "released_seats": released_seats,
+        "refund_status": "REFUNDED",
+        "cancelled_at": now
+    }
+
+
+def get_booking_detail_for_user(
+    db: Session,
+    user: User,
+    booking_id: Optional[int] = None,
+    booking_code: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Lấy chi tiết vé điện tử của khách hàng (Task T3C6D1A).
+    """
+    now = datetime.utcnow()
+    query = db.query(Booking)
+    if booking_id is not None:
+        query = query.filter(Booking.id == booking_id)
+    elif booking_code is not None:
+        query = query.filter(Booking.booking_code == booking_code)
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cần cung cấp booking_id hoặc booking_code."
+        )
+
+    booking = query.first()
+    if not booking:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Không tìm thấy đơn vé yêu cầu."
+        )
+
+    # Kiểm tra quyền: chỉ chủ sở hữu vé hoặc ADMIN mới xem được
+    user_role_name = getattr(user.role, "name", "") if hasattr(user, "role") else ""
+    if booking.user_id != user.id and user_role_name != "ADMIN":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Bạn không có quyền truy cập đơn vé này."
+        )
+
+    return format_ticket_response(booking, now)
 
 
 # ============================================================================
