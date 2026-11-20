@@ -52,6 +52,37 @@ def admin_get_showtimes(
 
 
 # ============================================================================
+# TỰ ĐỘNG SINH & DỌN DẸP SUẤT CHIẾU CHO ADMIN
+# Khai báo trước /{showtime_id} để tránh match nhầm route
+# ============================================================================
+
+@router.post(
+    "/auto-generate",
+    summary="Admin: Tự động sinh suất chiếu thông minh cho các ngày tiếp theo",
+    description="Tự động lập lịch phân bổ phim cho các phòng chiếu trong N ngày tiếp theo mà không bị trùng giờ, giúp admin không phải tạo thủ công.",
+)
+def admin_auto_generate_showtimes(
+    days: int = Query(7, ge=1, le=14, description="Số ngày tiếp theo cần tự động sinh suất chiếu (mặc định: 7 ngày)"),
+    db: Session = Depends(get_db),
+):
+    result = showtime_service.auto_generate_showtimes(db=db, days_ahead=days)
+    return result
+
+
+@router.post(
+    "/cleanup-past",
+    summary="Admin: Tự động dọn dẹp các suất chiếu phim cũ đã kết thúc",
+    description="Xóa vĩnh viễn các suất chiếu cũ không có người mua vé để giải phóng lịch phòng và làm gọn CSDL.",
+)
+def admin_cleanup_past_showtimes(
+    days: int = Query(0, ge=0, description="Số ngày trước hôm nay cần dọn dẹp (mặc định: 0, dọn các ngày trước hôm nay)"),
+    db: Session = Depends(get_db),
+):
+    result = showtime_service.cleanup_past_showtimes(db=db, older_than_days=days)
+    return result
+
+
+# ============================================================================
 # CẤU HÌNH GIÁ VÉ THEO LOẠI GHẾ & KHUNG GIỜ (SRS: GIÁ VÉ & PHỤ THU)
 # Phải khai báo trước /{showtime_id} để tránh router match nhầm int param
 # ============================================================================

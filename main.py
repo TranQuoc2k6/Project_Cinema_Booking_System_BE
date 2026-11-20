@@ -1,13 +1,65 @@
 import os
+import asyncio
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from database import SessionLocal
 from app.routers import movies, auth, admin, seats, showtimes, cinemas, rooms, bookings, users, payments
+
+
+async def background_daily_showtime_maintenance():
+    """
+    Tác vụ chạy ngầm định kỳ:
+    - Khi hết ngày / sang ngày mới: dọn dẹp các suất chiếu cũ của ngày hôm trước
+    - Tự động sinh suất chiếu cho 7 ngày tiếp theo để luôn duy trì lịch chiếu liên tục
+    """
+    while True:
+        try:
+            # Chờ 1 giờ trước mỗi lần quét định kỳ
+            await asyncio.sleep(3600)
+            db = SessionLocal()
+            try:
+                from app.services.showtime_service import cleanup_past_showtimes, auto_generate_showtimes
+                cleanup_past_showtimes(db)
+                auto_generate_showtimes(db, days_ahead=7)
+            finally:
+                db.close()
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            print(f"[Periodic Showtime Maintenance Error] {e}")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Khởi động: chạy dọn dẹp và tự động sinh suất chiếu ngay khi khởi động server
+    try:
+        db = SessionLocal()
+        try:
+            from app.services.showtime_service import cleanup_past_showtimes, auto_generate_showtimes
+            cleanup_past_showtimes(db)
+            auto_generate_showtimes(db, days_ahead=7)
+        finally:
+            db.close()
+    except Exception as e:
+        print(f"[Startup Showtime Maintenance Notice] {e}")
+
+    # Bắt đầu vòng lặp chạy ngầm
+    maintenance_task = asyncio.create_task(background_daily_showtime_maintenance())
+    yield
+    maintenance_task.cancel()
+    try:
+        await maintenance_task
+    except asyncio.CancelledError:
+        pass
+
 
 app = FastAPI(
     title="Cinema Booking System API",
     description="Hệ thống Backend Đặt vé xem phim trực tuyến - Tích hợp Admin Portal & Security",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan,
 )
 
 # Cấu hình CORS cho Frontend kết nối
