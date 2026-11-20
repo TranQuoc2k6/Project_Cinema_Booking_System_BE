@@ -8,8 +8,11 @@ from app.schemas.showtime import (
     AdminShowtimeUpdate,
     AdminShowtimeResponse,
     AdminShowtimeListResponse,
+    PricingConfigResponse,
+    PricingConfigUpdate,
 )
 from app.services import showtime_service
+from app.core.pricing import get_pricing_config, update_pricing_config
 
 router = APIRouter(
     prefix="/showtimes",
@@ -45,6 +48,57 @@ def admin_get_showtimes(
         date_str=date,
         search=search,
         status_filter=status,
+    )
+
+
+# ============================================================================
+# CẤU HÌNH GIÁ VÉ THEO LOẠI GHẾ & KHUNG GIỜ (SRS: GIÁ VÉ & PHỤ THU)
+# Phải khai báo trước /{showtime_id} để tránh router match nhầm int param
+# ============================================================================
+
+@router.get("/pricing-config", response_model=PricingConfigResponse, summary="Admin: Xem cấu hình giá vé theo loại ghế & phụ thu")
+def get_pricing_configuration():
+    """
+    Lấy cấu hình giá vé hiện tại của hệ thống:
+    - Hệ số nhân theo loại ghế (Standard: 1.0, VIP: 1.5, Couple: 2.0).
+    - Phụ thu cuối tuần (Thứ 7, Chủ Nhật, tối Thứ 6).
+    - Phụ thu khung giờ vàng (18:00 - 22:00).
+    """
+    cfg = get_pricing_config()
+    return PricingConfigResponse(
+        seat_multipliers={k: float(v) for k, v in cfg["seat_multipliers"].items()},
+        seat_type_surcharges={k: float(v) for k, v in cfg["seat_type_surcharges"].items()},
+        weekend_surcharge=float(cfg["weekend_surcharge"]),
+        peak_hour_surcharge=float(cfg["peak_hour_surcharge"]),
+        peak_hour_start=cfg["peak_hour_start"],
+        peak_hour_end=cfg["peak_hour_end"],
+        weekend_days=cfg["weekend_days"],
+        include_friday_evening=cfg["include_friday_evening"],
+        friday_evening_start_hour=cfg["friday_evening_start_hour"],
+    )
+
+
+@router.put("/pricing-config", response_model=PricingConfigResponse, summary="Admin: Cập nhật cấu hình giá vé & phụ thu")
+def update_pricing_configuration(config_in: PricingConfigUpdate):
+    """
+    Cập nhật chính sách giá vé:
+    - Điều chỉnh hệ số giá theo loại ghế.
+    - Cập nhật số tiền phụ thu cuối tuần (weekend_surcharge).
+    - Cập nhật số tiền phụ thu giờ vàng (peak_hour_surcharge) và khung giờ.
+    Thay đổi sẽ áp dụng ngay lập tức cho các suất chiếu và trang chọn ghế.
+    """
+    update_data = config_in.model_dump(exclude_unset=True)
+    cfg = update_pricing_config(update_data)
+    return PricingConfigResponse(
+        seat_multipliers={k: float(v) for k, v in cfg["seat_multipliers"].items()},
+        seat_type_surcharges={k: float(v) for k, v in cfg["seat_type_surcharges"].items()},
+        weekend_surcharge=float(cfg["weekend_surcharge"]),
+        peak_hour_surcharge=float(cfg["peak_hour_surcharge"]),
+        peak_hour_start=cfg["peak_hour_start"],
+        peak_hour_end=cfg["peak_hour_end"],
+        weekend_days=cfg["weekend_days"],
+        include_friday_evening=cfg["include_friday_evening"],
+        friday_evening_start_hour=cfg["friday_evening_start_hour"],
     )
 
 
@@ -119,3 +173,4 @@ def admin_cancel_showtime_post_alias(
 ):
     """Alias dạng POST cho chức năng hủy suất chiếu."""
     return showtime_service.admin_delete_showtime(db=db, showtime_id=showtime_id, force=force)
+

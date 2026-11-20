@@ -36,7 +36,6 @@ def override_get_db():
         db.close()
 
 
-app.dependency_overrides[get_db] = override_get_db
 client = TestClient(app)
 
 
@@ -105,6 +104,7 @@ class TestAdminMoviesAPI(unittest.TestCase):
 
     def tearDown(self):
         Base.metadata.drop_all(bind=engine)
+        app.dependency_overrides.clear()
 
     # ------------------------------------------------------------------------
     # 1. KIỂM THỬ BẢO MẬT & PHÂN QUYỀN (REQUIRE_ADMIN GUARD)

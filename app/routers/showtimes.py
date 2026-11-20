@@ -1,10 +1,14 @@
 from datetime import date
+from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
+from app.core.pricing import get_pricing_breakdown, get_pricing_config
+from app.models.showtime import Showtime
 from app.schemas.showtime import (
     CinemaShowtimesResponse,
+    PricingConfigResponse,
     ShowtimeDetailResponse,
     ShowtimeSeatMapResponse,
 )
@@ -16,6 +20,27 @@ from app.services.showtime_service import (
 from database import get_db
 
 router = APIRouter(prefix="/api/showtimes", tags=["Showtimes"])
+
+
+@router.get(
+    "/pricing-config",
+    response_model=PricingConfigResponse,
+    summary="Chính sách giá vé & phụ thu hiện hành",
+    description="Xem thông tin biểu giá: hệ số nhân theo loại ghế (Standard, VIP, Couple), phụ thu cuối tuần và phụ thu khung giờ vàng.",
+)
+def get_public_pricing_config() -> PricingConfigResponse:
+    cfg = get_pricing_config()
+    return PricingConfigResponse(
+        seat_multipliers={k: float(v) for k, v in cfg["seat_multipliers"].items()},
+        seat_type_surcharges={k: float(v) for k, v in cfg["seat_type_surcharges"].items()},
+        weekend_surcharge=float(cfg["weekend_surcharge"]),
+        peak_hour_surcharge=float(cfg["peak_hour_surcharge"]),
+        peak_hour_start=cfg["peak_hour_start"],
+        peak_hour_end=cfg["peak_hour_end"],
+        weekend_days=cfg["weekend_days"],
+        include_friday_evening=cfg["include_friday_evening"],
+        friday_evening_start_hour=cfg["friday_evening_start_hour"],
+    )
 
 
 @router.get(
@@ -92,3 +117,29 @@ def get_showtime_detail(
             detail=f"Showtime {showtime_id} not found",
         )
     return result
+
+
+@router.get(
+    "/{showtime_id}/pricing",
+    summary="Bảng phân tích chi tiết giá vé của suất chiếu",
+    description="Trả về chi tiết giá cơ bản, phụ thu cuối tuần, phụ thu giờ vàng và giá áp dụng cho từng loại ghế (Standard, VIP, Couple) của suất chiếu.",
+)
+def get_showtime_pricing(
+    showtime_id: int,
+    db: Session = Depends(get_db),
+):
+    showtime = db.query(Showtime).filter(Showtime.id == showtime_id).first()
+    if not showtime:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Showtime {showtime_id} not found",
+        )
+
+    base_price = Decimal(str(showtime.price))
+    breakdown = get_pricing_breakdown(base_price=base_price, showtime_start=showtime.start_time)
+    return {
+        "showtime_id": showtime.id,
+        "start_time": showtime.start_time.isoformat() if showtime.start_time else None,
+        "pricing": breakdown,
+    }
+

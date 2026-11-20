@@ -1,0 +1,22 @@
+{
+  "seat_multipliers": {
+    "standard": 1.0,
+    "vip": 1.5,
+    "couple": 2.0
+  },
+  "seat_type_surcharges": {
+    "standard": 0.0,
+    "vip": 0.0,
+    "couple": 0.0
+  },
+  "weekend_surcharge": 10000.0,
+  "peak_hour_surcharge": 10000.0,
+  "weekend_days": [
+    5,
+    6
+  ],
+  "include_friday_evening": true,
+  "friday_evening_start_hour": 17,
+  "peak_hour_start": "18:00",
+  "peak_hour_end": "22:00"
+}

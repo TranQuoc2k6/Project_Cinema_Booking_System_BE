@@ -20,6 +20,7 @@ from app.models.movie import Movie
 from app.models.room import Room
 from app.models.cinema import Cinema
 from app.models.payment import Payment
+from app.core.pricing import calculate_seat_price
 
 
 # Hệ số nhân giá theo loại ghế (chuẩn toàn hệ thống)
@@ -139,12 +140,19 @@ def hold_seats(showtime_id: int, seat_ids: List[int], user_id: int, db: Session)
                 detail="Ghế không thuộc cùng phòng với suất chiếu",
             )
 
-    # Tính total_price dựa trên giá cơ bản suất chiếu * multiplier của từng ghế
+    # Tính total_price dựa trên giá cơ bản suất chiếu, phụ thu cuối tuần/giờ vàng & multiplier của từng ghế
     base_price = Decimal(str(showtime.price))
+    st_start = showtime.start_time if isinstance(getattr(showtime, "start_time", None), datetime) else None
+    seat_prices_map = {}
     total_price = Decimal("0")
     for seat in seats:
-        mult = get_seat_multiplier(seat)
-        total_price += (base_price * mult).quantize(Decimal("0.01"))
+        seat_price = calculate_seat_price(
+            base_price=base_price,
+            seat_type=seat.seat_type,
+            showtime_start=st_start,
+        )
+        seat_prices_map[seat.id] = seat_price
+        total_price += seat_price
 
     # Tạo Booking và BookingSeat trong một transaction an toàn
     try:
@@ -163,8 +171,7 @@ def hold_seats(showtime_id: int, seat_ids: List[int], user_id: int, db: Session)
 
         # Thêm các BookingSeat – UNIQUE sẽ được kiểm tra ở cấp DB
         for seat in seats:
-            mult = get_seat_multiplier(seat)
-            seat_price = (base_price * mult).quantize(Decimal("0.01"))
+            seat_price = seat_prices_map[seat.id]
             booking_seat = BookingSeat(
                 booking_id=booking.id,
                 showtime_id=showtime_id,
@@ -271,6 +278,7 @@ def confirm_booking(
         )
 
     base_price = Decimal(str(showtime.price))
+    st_start = showtime.start_time if isinstance(getattr(showtime, "start_time", None), datetime) else None
     if not booking.booking_seats:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -280,8 +288,12 @@ def confirm_booking(
     server_total_price = Decimal("0")
     for bs in booking.booking_seats:
         seat = bs.seat
-        mult = get_seat_multiplier(seat)
-        calculated_seat_price = (base_price * mult).quantize(Decimal("0.01"))
+        stype = seat.seat_type if seat else "standard"
+        calculated_seat_price = calculate_seat_price(
+            base_price=base_price,
+            seat_type=stype,
+            showtime_start=st_start,
+        )
         bs.price = calculated_seat_price
         server_total_price += calculated_seat_price
 

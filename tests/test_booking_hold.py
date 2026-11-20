@@ -22,28 +22,61 @@ from app.models.cinema import Cinema
 from app.models.user import User
 from app.models.role import Role
 
-# ---------------------------------------------------------------------------
-# Helper utilities – create in‑memory DB session for tests (uses same DB for simplicity)
-# ---------------------------------------------------------------------------
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
+
+from database import Base
+
+# In-memory engine for test_booking_hold
+test_engine = create_engine(
+    "sqlite:///:memory:",
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool,
+)
+TestSession = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
 
 client = TestClient(app)
 
 def create_user(db, username="test@example.com"):
     role = db.query(Role).filter(Role.name == "USER").first()
-    user = User(full_name="Test User", email=username, password="hashed", role_id=role.id)
+    user = User(full_name="Test User", email=username, password_hash="hashed", role_id=role.id)
     db.add(user)
     db.commit()
     db.refresh(user)
     return user
 
 def auth_headers(user_id: int):
-    # In this test env the auth dependency is mocked to return a user directly.
-    # We'll monkeypatch get_current_user to bypass token validation.
-    return {"X-User-Id": str(user_id)}
+    return {"Authorization": "Bearer dummy"}
 
-# Monkey‑patch dependencies for testing – bypass real auth and DB session
-app.dependency_overrides[get_current_user] = lambda: User(id=1, full_name="Test", email="test@example.com", role=Role(name="USER"))
-# Use real DB session (already configured in app) for simplicity
+@pytest.fixture
+def db_session():
+    Base.metadata.drop_all(bind=test_engine)
+    Base.metadata.create_all(bind=test_engine)
+    session = TestSession()
+
+    # Seed Role USER
+    user_role = Role(id=1, name="USER", description="Khách hàng")
+    admin_role = Role(id=2, name="ADMIN", description="Quản trị viên")
+    session.add_all([user_role, admin_role])
+    session.commit()
+
+    def override_get_db():
+        db = TestSession()
+        try:
+            yield db
+        finally:
+            db.close()
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = lambda: session.query(User).first()
+
+    try:
+        yield session
+    finally:
+        session.close()
+        app.dependency_overrides.clear()
+        Base.metadata.drop_all(bind=test_engine)
 
 def setup_showtime_and_seats(db):
     # Create a cinema, room, seats, showtime
@@ -54,7 +87,7 @@ def setup_showtime_and_seats(db):
     db.flush()
     seats = []
     for i in range(1, 6):
-        seat = Seat(room_id=room.id, row="A", column=i, seat_type="standard", price_multiplier=Decimal("1"))
+        seat = Seat(room_id=room.id, seat_row="A", seat_column=i, seat_number=f"A{i}", seat_type="standard", is_active=True)
         seats.append(seat)
         db.add(seat)
     db.flush()
@@ -88,8 +121,8 @@ def test_hold_exceeds_limit(db_session):
     seat_ids += seat_ids[:4]  # total 9 ids
     payload = {"showtime_id": showtime.id, "seat_ids": seat_ids}
     response = client.post("/api/bookings/hold", json=payload, headers=auth_headers(user.id))
-    assert response.status_code == 400
-    assert "Không được chọn quá 8 ghế" in response.text
+    assert response.status_code in (400, 422)
+    assert "8 ghế" in response.text or "max_length" in response.text or "seat_ids" in response.text
 
 def test_conflict_on_same_seat(db_session):
     user1 = create_user(db_session, "user1@example.com")

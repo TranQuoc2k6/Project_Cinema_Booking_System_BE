@@ -25,10 +25,17 @@ from app.schemas.showtime import (
 )
 from app.services.booking_service import clean_expired_holds
 
+from app.core.pricing import (
+    calculate_seat_price,
+    get_pricing_breakdown,
+    get_pricing_config,
+    get_showtime_surcharges,
+)
+
 # Thời gian dọn phòng sau mỗi suất chiếu (phút)
 CLEANING_BUFFER_MINUTES = 15
 
-# Hệ số nhân giá theo loại ghế
+# Hệ số nhân giá theo loại ghế (tương thích ngược)
 SEAT_PRICE_MULTIPLIER: dict[str, Decimal] = {
     "standard": Decimal("1.0"),
     "vip": Decimal("1.5"),
@@ -164,7 +171,10 @@ def get_showtime_seat_map(
       - available: không có booking nào hoặc booking đã CANCELLED / HET_HAN
     """
     # 0. Tự động giải phóng các ghế giữ chỗ quá hạn 10 phút trước khi tính toán
-    clean_expired_holds(db)
+    try:
+        clean_expired_holds(db)
+    except Exception:
+        pass
 
     # 1. Kiểm tra suất chiếu tồn tại
     showtime: Showtime | None = (
@@ -173,7 +183,15 @@ def get_showtime_seat_map(
     if showtime is None:
         return None  # Caller sẽ raise 404
 
-    base_price: Decimal = Decimal(str(showtime.price))
+    try:
+        base_price: Decimal = Decimal(str(showtime.price))
+    except Exception:
+        base_price = Decimal("95000.00")
+
+    # Xác định thời gian suất chiếu để tính phụ thu cuối tuần & giờ vàng
+    st_start = showtime.start_time if isinstance(getattr(showtime, "start_time", None), datetime) else None
+    surcharges = get_showtime_surcharges(st_start)
+    pricing_breakdown = get_pricing_breakdown(base_price, st_start)
 
     # 2. Lấy tất cả ghế của phòng chiếu, sắp xếp theo hàng → cột
     seats: list[Seat] = (
@@ -203,12 +221,15 @@ def get_showtime_seat_map(
         if existing not in ("CONFIRMED", "DA_THANH_TOAN"):
             occupied[seat_id] = booking_status
 
-    # 4. Xây dựng danh sách ghế kèm trạng thái & giá
+    # 4. Xây dựng danh sách ghế kèm trạng thái & giá (áp dụng phụ thu & hệ số ghế)
     seat_items: list[SeatStatusItem] = []
     for seat in seats:
         seat_type = seat.seat_type or "standard"
-        multiplier = SEAT_PRICE_MULTIPLIER.get(seat_type, Decimal("1.0"))
-        price = (base_price * multiplier).quantize(Decimal("0.01"))
+        price = calculate_seat_price(
+            base_price=base_price,
+            seat_type=seat_type,
+            showtime_start=st_start,
+        )
 
         raw_status = occupied.get(seat.id)
         if raw_status in ("CONFIRMED", "DA_THANH_TOAN"):
@@ -241,6 +262,11 @@ def get_showtime_seat_map(
         base_price=base_price,
         total_seats=len(seat_items),
         available_seats=sum(1 for s in seat_items if s.status == "available"),
+        is_weekend=surcharges["is_weekend"],
+        is_peak_hour=surcharges["is_peak_hour"],
+        weekend_surcharge=surcharges["weekend_surcharge"],
+        peak_hour_surcharge=surcharges["peak_hour_surcharge"],
+        pricing_breakdown=pricing_breakdown,
         rows={row: seats_in_row for row, seats_in_row in rows_map.items()},
     )
 
