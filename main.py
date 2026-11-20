@@ -88,6 +88,7 @@ app.include_router(showtimes.router)
 app.include_router(cinemas.router)
 app.include_router(rooms.router)
 app.include_router(bookings.router)
+app.include_router(tickets.router)
 app.include_router(payments.router)
 app.include_router(users.router)
 

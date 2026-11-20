@@ -188,7 +188,29 @@ class MyTicketResponse(BaseModel):
     created_at: datetime
     showtime: ShowtimeTicketInfo
     seats: List[TicketSeatItem]
+    can_cancel: bool = False
+    cancel_deadline: Optional[datetime] = None
+    cancel_reason: Optional[str] = None
     model_config = ConfigDict(from_attributes=True)
+
+
+# ---------------------------------------------------------------------------
+# Ticket Details & Cancellation Schemas (Task T3C6D1A)
+# ---------------------------------------------------------------------------
+
+class UserCancelBookingResponse(BaseModel):
+    """
+    Response payload sau khi khách hàng hủy vé thành công (Task T3C6D1A).
+    Bao gồm thông tin ghế đã giải phóng và thời điểm hủy.
+    """
+    success: bool = True
+    message: str = "Đã hủy vé thành công"
+    booking_id: int
+    booking_code: str
+    new_status: str = "DA_HUY"
+    released_seats: List[str] = []
+    refund_status: Optional[str] = "REFUNDED"
+    cancelled_at: datetime
 
 
 # ---------------------------------------------------------------------------

@@ -13,6 +13,7 @@ from app.schemas.booking import (
     BookingHoldResponse,
     CleanExpiredResponse,
     MyTicketResponse,
+    UserCancelBookingResponse,
 )
 from app.services import booking_service
 
@@ -139,4 +140,78 @@ def get_my_bookings_alias(
         user_id=current_user.id,
         status_filter=status_filter,
         db=db,
+    )
+
+
+@router.get(
+    "/code/{booking_code}",
+    response_model=MyTicketResponse,
+    summary="Chi tiết vé điện tử theo mã vé (Task T3C6D1A)",
+    description="Lấy chi tiết vé điện tử sau khi đặt hoặc tra cứu (mã vé, phim, rạp, phòng, ghế, giờ, điều kiện hủy).",
+)
+def get_ticket_by_code(
+    booking_code: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """API lấy chi tiết vé điện tử theo mã booking_code"""
+    return booking_service.get_booking_detail_for_user(
+        db=db,
+        user=current_user,
+        booking_code=booking_code,
+    )
+
+
+@router.get(
+    "/{booking_id}",
+    response_model=MyTicketResponse,
+    summary="Chi tiết vé điện tử theo ID (Task T3C6D1A)",
+    description="Lấy chi tiết vé điện tử theo ID đơn vé, bao gồm mã vé, phim, rạp, phòng, ghế, giờ và cờ can_cancel.",
+)
+def get_ticket_by_id(
+    booking_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """API lấy chi tiết vé điện tử theo booking_id"""
+    return booking_service.get_booking_detail_for_user(
+        db=db,
+        user=current_user,
+        booking_id=booking_id,
+    )
+
+
+@router.post(
+    "/{booking_id}/cancel",
+    response_model=UserCancelBookingResponse,
+    summary="Khách hàng hủy vé (Task T3C6D1A)",
+    description="Khách hàng tự hủy vé của mình trước giờ chiếu ít nhất 2 tiếng. Hệ thống sẽ giải phóng ghế và hoàn trả trạng thái.",
+)
+def cancel_ticket(
+    booking_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """API khách hàng hủy vé xem phim trước giờ chiếu 2 tiếng"""
+    return booking_service.user_cancel_booking(
+        db=db,
+        user=current_user,
+        booking_id=booking_id,
+    )
+
+
+@router.put(
+    "/{booking_id}/cancel",
+    response_model=UserCancelBookingResponse,
+    include_in_schema=False,
+)
+def cancel_ticket_put_alias(
+    booking_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return booking_service.user_cancel_booking(
+        db=db,
+        user=current_user,
+        booking_id=booking_id,
     )
