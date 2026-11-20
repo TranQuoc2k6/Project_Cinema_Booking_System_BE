@@ -75,6 +75,15 @@ def get_upcoming_showtimes(
         )
 
     rows = query.order_by(Cinema.id.asc(), Showtime.start_time.asc()).all()
+
+    # Tự động bổ sung suất chiếu thông minh nếu ngày yêu cầu chưa có suất chiếu nào
+    if len(rows) == 0:
+        target_check_date = show_date or date.today()
+        if target_check_date >= date.today() and (target_check_date - date.today()).days <= 14:
+            gen_res = auto_generate_showtimes(db=db, days_ahead=1, start_from_date=target_check_date)
+            if gen_res.get("created_count", 0) > 0:
+                rows = query.order_by(Cinema.id.asc(), Showtime.start_time.asc()).all()
+
     grouped: dict[int, CinemaShowtimesResponse] = {}
 
     for cinema, showtime, movie, room in rows:
@@ -656,4 +665,171 @@ def admin_delete_showtime(db: Session, showtime_id: int, force: bool = False):
         "status": "success",
         "message": f"Đã hủy và xóa thành công suất chiếu #{showtime_id} khỏi hệ thống.",
     }
+
+
+# ============================================================================
+# TỰ ĐỘNG DỌN DẸP SUẤT CHIẾU CŨ & TỰ ĐỘNG SINH SUẤT CHIẾU CHO CÁC NGÀY TỚI
+# ============================================================================
+
+def cleanup_past_showtimes(db: Session, older_than_days: int = 0) -> dict:
+    """
+    Tự động dọn dẹp các suất chiếu phim cũ đã kết thúc trước hôm nay:
+    - Tìm các suất chiếu có start_time trước ngày hôm nay (start_time < today_start).
+    - Với các suất chiếu KHÔNG có vé đã thanh toán (chưa có booking CONFIRMED hoặc DA_THANH_TOAN):
+      Xóa vĩnh viễn khỏi CSDL để không làm rối dữ liệu và giải phóng lịch phòng.
+    - Với các suất chiếu ĐÃ CÓ vé đã thanh toán: Giữ lại để bảo toàn lịch sử vé khách hàng.
+    - Trả về số lượng suất chiếu đã được xóa.
+    """
+    today_start = datetime.combine(date.today() - timedelta(days=older_than_days), time.min)
+
+    past_showtimes = (
+        db.query(Showtime)
+        .filter(Showtime.start_time < today_start)
+        .all()
+    )
+
+    deleted_count = 0
+    preserved_count = 0
+
+    for st in past_showtimes:
+        # Kiểm tra xem có vé đã đặt/thanh toán thành công không
+        paid_booking_count = (
+            db.query(Booking)
+            .filter(
+                Booking.showtime_id == st.id,
+                Booking.status.in_(["DA_THANH_TOAN", "CONFIRMED"]),
+            )
+            .count()
+        )
+
+        if paid_booking_count == 0:
+            db.delete(st)
+            deleted_count += 1
+        else:
+            preserved_count += 1
+
+    if deleted_count > 0:
+        db.commit()
+
+    return {
+        "status": "success",
+        "message": f"Đã dọn dẹp {deleted_count} suất chiếu cũ (giữ lại {preserved_count} suất chiếu có lịch sử thanh toán).",
+        "deleted_count": deleted_count,
+        "preserved_count": preserved_count,
+    }
+
+
+def auto_generate_showtimes(
+    db: Session,
+    days_ahead: int = 7,
+    start_from_date: date | None = None,
+) -> dict:
+    """
+    Tự động sinh các suất chiếu phim thông minh cho các ngày tiếp theo:
+    - Quét từng ngày từ start_from_date (mặc định là hôm nay) đến start_from_date + days_ahead.
+    - Lấy danh sách phim đang chiếu (NOW_SHOWING), nếu rỗng thì lấy toàn bộ phim.
+    - Lấy toàn bộ phòng chiếu và rạp.
+    - Duyệt qua từng phòng, lập lịch các khung giờ chuẩn trong ngày (09:00, 11:45, 14:30, 17:15, 20:00, 22:45).
+    - Xoay vòng (round-robin) phim để phân bố đều tác phẩm và khung giờ.
+    - Tự động bỏ qua các khung giờ đã có suất chiếu trùng (dựa vào check_showtime_conflict).
+    - Tự động bỏ qua các khung giờ trong quá khứ nếu lập lịch cho ngày hôm nay.
+    - Tính giá vé cơ bản theo loại phòng (IMAX x1.5, VIP x1.3, 2D chuẩn).
+    - Lưu vào CSDL và trả về thống kê.
+    """
+    today = date.today()
+    base_date = start_from_date or today
+    now = datetime.now()
+
+    movies = db.query(Movie).filter(Movie.status == "NOW_SHOWING").all()
+    if not movies:
+        movies = db.query(Movie).all()
+
+    rooms = db.query(Room).all()
+
+    if not movies or not rooms:
+        return {
+            "status": "warning",
+            "message": "Không tìm thấy phim hoặc phòng chiếu nào trong hệ thống để sinh suất chiếu.",
+            "created_count": 0,
+            "days_checked": 0,
+        }
+
+    # Các mốc giờ chiếu chuẩn đa dạng trong ngày
+    standard_slots = [
+        {"hour": 9, "minute": 0, "base_price": 85000},
+        {"hour": 11, "minute": 45, "base_price": 90000},
+        {"hour": 14, "minute": 30, "base_price": 95000},
+        {"hour": 17, "minute": 15, "base_price": 105000},
+        {"hour": 20, "minute": 0, "base_price": 115000},
+        {"hour": 22, "minute": 45, "base_price": 90000},
+    ]
+
+    total_created = 0
+    movie_count = len(movies)
+
+    for day_offset in range(days_ahead):
+        current_date = base_date + timedelta(days=day_offset)
+
+        for r_idx, room in enumerate(rooms):
+            for slot_idx, slot in enumerate(standard_slots):
+                # Chọn phim luân phiên theo phòng, ngày và ca chiếu
+                movie = movies[(r_idx + day_offset + slot_idx) % movie_count]
+                duration = movie.duration_minutes or 120
+
+                start_dt = datetime(
+                    current_date.year,
+                    current_date.month,
+                    current_date.day,
+                    slot["hour"],
+                    slot["minute"],
+                    0,
+                )
+                end_dt = start_dt + timedelta(minutes=duration)
+
+                # Nếu là ngày hôm nay và giờ chiếu đã trôi qua, bỏ qua
+                if start_dt < now + timedelta(minutes=15):
+                    continue
+
+                # Kiểm tra xung đột giờ chiếu trong cùng phòng (thời lượng + 15' dọn phòng)
+                conflict = check_showtime_conflict(
+                    db=db,
+                    room_id=room.id,
+                    start_time=start_dt,
+                    end_time=end_dt,
+                )
+                if conflict:
+                    continue
+
+                # Tính giá vé cơ bản theo loại phòng
+                price = slot["base_price"]
+                r_type = (room.room_type or "2D").upper()
+                if "IMAX" in r_type:
+                    price = int(price * 1.5)
+                elif "VIP" in r_type or "GOLD" in r_type:
+                    price = int(price * 1.3)
+
+                price_dec = Decimal(str(int(price // 1000 * 1000)))
+
+                new_st = Showtime(
+                    movie_id=movie.id,
+                    room_id=room.id,
+                    start_time=start_dt,
+                    end_time=end_dt,
+                    price=price_dec,
+                )
+                db.add(new_st)
+                total_created += 1
+
+    if total_created > 0:
+        db.commit()
+
+    return {
+        "status": "success",
+        "message": f"Đã tự động tạo thành công {total_created} suất chiếu mới cho {days_ahead} ngày.",
+        "created_count": total_created,
+        "days_checked": days_ahead,
+        "start_date": base_date.strftime("%Y-%m-%d"),
+        "end_date": (base_date + timedelta(days=days_ahead - 1)).strftime("%Y-%m-%d"),
+    }
+
 

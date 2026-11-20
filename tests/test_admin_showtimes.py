@@ -330,6 +330,27 @@ class TestAdminShowtimesAPI(unittest.TestCase):
         res = client.get("/api/admin/showtimes", headers=self.user_headers)
         self.assertEqual(res.status_code, 403)
 
+    def test_admin_auto_generate_and_cleanup_endpoints(self):
+        # 1. Test auto-generate showtimes
+        gen_res = client.post(
+            "/api/admin/showtimes/auto-generate?days=3",
+            headers=self.admin_headers,
+        )
+        self.assertEqual(gen_res.status_code, 200)
+        gen_data = gen_res.json()
+        self.assertEqual(gen_data["status"], "success")
+        self.assertGreaterEqual(gen_data["created_count"], 1)
+
+        # 2. Test cleanup past showtimes
+        clean_res = client.post(
+            "/api/admin/showtimes/cleanup-past?days=0",
+            headers=self.admin_headers,
+        )
+        self.assertEqual(clean_res.status_code, 200)
+        clean_data = clean_res.json()
+        self.assertEqual(clean_data["status"], "success")
+        self.assertIn("deleted_count", clean_data)
+
 
 if __name__ == "__main__":
     unittest.main()
