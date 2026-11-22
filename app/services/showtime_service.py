@@ -51,13 +51,11 @@ def get_upcoming_showtimes(
     city: str | None = None,
 ) -> list[CinemaShowtimesResponse]:
     """Return upcoming showtimes grouped by cinema, with optional filters."""
-    now = datetime.now()
     query = (
         db.query(Cinema, Showtime, Movie, Room)
         .join(Room, Showtime.room_id == Room.id)
         .join(Cinema, Room.cinema_id == Cinema.id)
         .join(Movie, Showtime.movie_id == Movie.id)
-        .filter(Showtime.start_time >= now)
     )
 
     if movie_id is not None:
