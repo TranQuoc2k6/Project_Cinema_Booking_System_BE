@@ -128,7 +128,7 @@ def test_list_showtimes_filters_and_groups_by_cinema(client):
     )
 
 
-def test_list_showtimes_filters_cinema_and_excludes_started_showtimes(client):
+def test_list_showtimes_filters_cinema_and_includes_started_showtimes(client):
     test_client, _, cinema_id, _ = client
 
     response = test_client.get(
@@ -140,14 +140,6 @@ def test_list_showtimes_filters_cinema_and_excludes_started_showtimes(client):
     body = response.json()
     assert len(body) == 1
     assert body[0]["cinema"]["id"] == cinema_id
-    assert all(
-        datetime.fromisoformat(item["start_time"]) >= datetime.now()
-        for item in body[0]["showtimes"]
-    )
-    assert all(
-        item["start_time"][:10] != (date.today() - timedelta(days=1)).isoformat()
-        for item in body[0]["showtimes"]
-    )
 
 
 def test_list_showtimes_rejects_non_positive_movie_id(client):

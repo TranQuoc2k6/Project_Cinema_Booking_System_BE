@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from database import SessionLocal
-from app.routers import movies, auth, admin, seats, showtimes, cinemas, rooms, bookings, users, payments
+from app.routers import movies, auth, admin, seats, showtimes, cinemas, rooms, bookings, users, payments, tickets
 
 
 async def background_daily_showtime_maintenance():

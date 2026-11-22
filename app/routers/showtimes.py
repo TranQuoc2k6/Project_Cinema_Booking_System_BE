@@ -47,7 +47,7 @@ def get_public_pricing_config() -> PricingConfigResponse:
     "",
     response_model=list[CinemaShowtimesResponse],
     summary="Lấy suất chiếu theo phim, rạp và ngày",
-    description="Chỉ trả về suất chiếu chưa bắt đầu, được nhóm theo rạp.",
+    description="Trả về tất cả suất chiếu trong khoảng/ngày được lọc, được nhóm theo rạp.",
 )
 def list_showtimes(
     movie_id: int | None = Query(None, ge=1),
