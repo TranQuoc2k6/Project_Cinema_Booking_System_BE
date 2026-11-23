@@ -23,6 +23,7 @@ class CinemaUpdate(BaseModel):
 
 class CinemaResponse(CinemaBase):
     id: int
+    room_count: Optional[int] = 0
 
     model_config = ConfigDict(from_attributes=True)
 

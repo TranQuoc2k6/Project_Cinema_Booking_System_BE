@@ -9,7 +9,10 @@ from app.models.seat import Seat
 from app.models.showtime import Showtime
 from app.models.booking import Booking
 from app.models.booking_seat import BookingSeat
+from app.models.combo import Combo
+from app.models.booking_combo import BookingCombo
 from app.models.payment import Payment
+from app.models.review import Review
 
 __all__ = [
     "Base",
@@ -24,5 +27,8 @@ __all__ = [
     "Showtime",
     "Booking",
     "BookingSeat",
+    "Combo",
+    "BookingCombo",
     "Payment",
+    "Review",
 ]

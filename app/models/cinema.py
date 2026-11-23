@@ -14,3 +14,7 @@ class Cinema(Base):
 
     # Mối quan hệ 1-N với Phòng chiếu
     rooms = relationship("Room", back_populates="cinema", cascade="all, delete-orphan")
+
+    @property
+    def room_count(self) -> int:
+        return len(self.rooms) if self.rooms else 0

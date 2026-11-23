@@ -32,20 +32,38 @@ INSERT INTO `genres` (`id`, `name`, `description`) VALUES
   (7, 'Hoat Hinh', 'Do hoa dac sac phu hop cho moi lua tuoi gia dinh.')
 ON DUPLICATE KEY UPDATE `description` = VALUES(`description`);
 
--- 4. MOVIES
+-- 4. MOVIES (Bao gồm 6 phim Đang chiếu & 3 phim Sắp công chiếu với Poster HD sắc nét)
 INSERT INTO `movies` (`id`, `title`, `slug`, `description`, `duration_minutes`, `release_date`, `poster_url`, `trailer_url`, `status`, `created_at`, `updated_at`) VALUES
-  (1, 'Mai', 'mai-2024', 'Cau chuyen tinh cam sau sac xoay quanh cuoc doi cua Mai va Duong.', 131, '2024-02-10', 'https://upload.wikimedia.org/wikipedia/vi/4/47/Mai_poster.jpg', 'https://www.youtube.com/watch?v=0wQv7n38h6g', 'NOW_SHOWING', NOW(), NOW()),
-  (2, 'Lat Mat 7: Mot Dieu Uoc', 'lat-mat-7-mot-dieu-uoc', 'Bo phim gia dinh xuc dong ve tinh mau tu thieng lieng cua ba Hai 73 tuoi.', 138, '2024-04-26', 'https://upload.wikimedia.org/wikipedia/vi/0/05/Lat_Mat_7_poster.jpg', 'https://www.youtube.com/watch?v=8RjQzQ2Q_54', 'NOW_SHOWING', NOW(), NOW()),
-  (3, 'Dune: Hanh Tinh Cat 2', 'dune-part-two', 'Paul Atreides lien minh cung Chani va nguoi Fremen tren hanh trinh bao thu.', 166, '2024-03-01', 'https://image.tmdb.org/t/p/original/8b8R8l88Qje9dn9OE8PY05Nxl1X.jpg', 'https://www.youtube.com/watch?v=Way9Dexny3w', 'NOW_SHOWING', NOW(), NOW()),
-  (4, 'Quat Mo Trung Ma (Exhuma)', 'exhuma-quat-mo-trung-ma', 'Hai phap su va thay phong thuy khai quat ngoi mo bi an giai cuu gia toc.', 134, '2024-03-15', 'https://image.tmdb.org/t/p/original/tMefBSflR6PGQLv7WvFPpKLZkyk.jpg', 'https://www.youtube.com/watch?v=33K_L5e22k4', 'NOW_SHOWING', NOW(), NOW()),
-  (5, 'Godzilla x Kong: De Che Moi', 'godzilla-x-kong-the-new-empire', 'Tran chien dinh cao giua Godzilla va Kong chong lai moi de doa khong lo.', 115, '2024-03-29', 'https://image.tmdb.org/t/p/original/bQ2ywkchCe02AcSnMuVeZ2QIDe.jpg', 'https://www.youtube.com/watch?v=lV1OOlGwExg', 'NOW_SHOWING', NOW(), NOW()),
-  (6, 'Kung Fu Panda 4', 'kung-fu-panda-4', 'Po tro thanh Thu linh Tinh than va tim kiem Than Long Dai Hiep moi.', 94, '2024-03-08', 'https://image.tmdb.org/t/p/original/kDp1vUBnMpe8ak4rjgl3cLELqjU.jpg', 'https://www.youtube.com/watch?v=_inKs4eeHiI', 'NOW_SHOWING', NOW(), NOW()),
-  (7, 'Conan: Ngoi Sao 5 Canh 1 Trieu Do', 'conan-ngoi-sao-5-canh-1-trieu-do', 'Cuoc ruot duoi tranh doat thanh kiem giua Sieu dao chich Kid va Conan.', 110, '2024-08-02', 'https://image.tmdb.org/t/p/original/7kAC1R8gE7o9U9zW3l3Z5Y2mB1.jpg', 'https://www.youtube.com/watch?v=conan_trailer', 'COMING_SOON', NOW(), NOW())
-ON DUPLICATE KEY UPDATE `title` = VALUES(`title`);
+  (1, 'Mai', 'mai-2024', 'Câu chuyện tình cảm sâu sắc, nhiều biến cố xoay quanh cuộc đời của Mai và Dương.', 131, '2024-02-10', 'https://images.unsplash.com/photo-1534447677768-be436bb09401?w=800&auto=format&fit=crop&q=80', 'https://www.youtube.com/watch?v=0wQv7n38h6g', 'NOW_SHOWING', NOW(), NOW()),
+  (2, 'Lật Mặt 7: Một Điều Ước', 'lat-mat-7-mot-dieu-uoc', 'Bộ phim gia đình xúc động về tình mẫu tử thiêng liêng của bà Hai 73 tuổi cùng những người con.', 138, '2024-04-26', 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=800&auto=format&fit=crop&q=80', 'https://www.youtube.com/watch?v=8RjQzQ2Q_54', 'NOW_SHOWING', NOW(), NOW()),
+  (3, 'Dune: Hành Tinh Cát 2', 'dune-part-two', 'Paul Atreides liên minh cùng Chani và người Fremen trên hành trình báo thù định mệnh chống lại những kẻ đã hủy diệt gia tộc.', 166, '2024-03-01', 'https://image.tmdb.org/t/p/original/8b8R8l88Qje9dn9OE8PY05Nxl1X.jpg', 'https://www.youtube.com/watch?v=Way9Dexny3w', 'NOW_SHOWING', NOW(), NOW()),
+  (4, 'Quật Mộ Trùng Ma (Exhuma)', 'exhuma-quat-mo-trung-ma', 'Hai pháp sư và thầy phong thủy cùng nhau khai quật ngôi mộ bí ẩn nhằm giải cứu một gia tộc giàu có khỏi lời nguyền truyền kiếp.', 134, '2024-03-15', 'https://image.tmdb.org/t/p/original/tMefBSflR6PGQLv7WvFPpKLZkyk.jpg', 'https://www.youtube.com/watch?v=33K_L5e22k4', 'NOW_SHOWING', NOW(), NOW()),
+  (5, 'Godzilla x Kong: Đế Chế Mới', 'godzilla-x-kong-the-new-empire', 'Trận chiến đỉnh cao giữa hai biểu tượng Godzilla và Kong chống lại mối đe dọa khổng lồ ẩn sâu trong lòng Trái Đất.', 115, '2024-03-29', 'https://images.unsplash.com/photo-1578632767115-351597cf2477?w=800&auto=format&fit=crop&q=80', 'https://www.youtube.com/watch?v=lV1OOlGwExg', 'NOW_SHOWING', NOW(), NOW()),
+  (6, 'Kung Fu Panda 4', 'kung-fu-panda-4', 'Gấu Po trở thành Thủ lĩnh Tinh thần của Thung lũng Bình Yên và bước vào hành trình tìm kiếm một Thần Long Đại Hiệp mới kế vị.', 94, '2024-03-08', 'https://image.tmdb.org/t/p/original/kDp1vUBnMpe8ak4rjgl3cLELqjU.jpg', 'https://www.youtube.com/watch?v=_inKs4eeHiI', 'NOW_SHOWING', NOW(), NOW()),
+  (7, 'Deadpool & Wolverine', 'deadpool-and-wolverine', 'Sự kết hợp lịch sử và đầy bùng nổ giữa hai dị nhân biểu tượng của Marvel trong chuyến phiêu lưu đa vũ trụ đầy bất ngờ và hài hước.', 128, '2026-11-28', 'https://image.tmdb.org/t/p/original/8cdWjvZQUExUUTzyp4t6EDMubfO.jpg', 'https://www.youtube.com/watch?v=73_1biulkYk', 'COMING_SOON', NOW(), NOW()),
+  (8, 'Moana 2: Hành Trình Biển Cả', 'moana-2-hanh-trinh-bien-ca', 'Moana cùng á thần Maui bước vào hành trình thám hiểm đại dương bao la đầy hiểm nguy và kỳ vĩ với những vùng biển chưa từng được khám phá.', 100, '2026-12-05', 'https://image.tmdb.org/t/p/original/yh64qw9mgXBvlaWDi7Q9tpUBAvH.jpg', 'https://www.youtube.com/watch?v=hDZ7y8RP5HE', 'COMING_SOON', NOW(), NOW()),
+  (9, 'Võ Sĩ Giác Đấu II (Gladiator II)', 'gladiator-2-vo-si-giac-dau', 'Trường thiên sử thi rực lửa tại đấu trường La Mã cổ đại nối tiếp huyền thoại điện ảnh từng đoạt giải Oscar danh giá năm 2000.', 148, '2026-12-18', 'https://image.tmdb.org/t/p/original/2cxhvwyEwRlysAmRH4iodkvo0z5.jpg', 'https://www.youtube.com/watch?v=4rgYUipGJNo', 'COMING_SOON', NOW(), NOW())
+ON DUPLICATE KEY UPDATE 
+  `title` = VALUES(`title`),
+  `slug` = VALUES(`slug`),
+  `description` = VALUES(`description`),
+  `duration_minutes` = VALUES(`duration_minutes`),
+  `release_date` = VALUES(`release_date`),
+  `poster_url` = VALUES(`poster_url`),
+  `trailer_url` = VALUES(`trailer_url`),
+  `status` = VALUES(`status`);
 
 -- 5. MOVIE_GENRES
 INSERT INTO `movie_genres` (`movie_id`, `genre_id`) VALUES
-  (1, 3), (1, 4), (2, 4), (2, 2), (3, 6), (3, 1), (4, 5), (5, 1), (5, 6), (6, 7), (6, 2), (7, 7), (7, 1)
+  (1, 3), (1, 4), 
+  (2, 4), (2, 2), 
+  (3, 6), (3, 1), 
+  (4, 5), 
+  (5, 1), (5, 6), 
+  (6, 7), (6, 2), 
+  (7, 1), (7, 2), (7, 6),
+  (8, 7), (8, 2),
+  (9, 1), (9, 4)
 ON DUPLICATE KEY UPDATE `genre_id` = VALUES(`genre_id`);
 
 -- 6. CINEMAS

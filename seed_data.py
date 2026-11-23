@@ -16,7 +16,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from database import engine, SessionLocal, Base
 import app.models
-from app.models import Role, User, Genre, Movie, Cinema, Room, Seat, Showtime
+from app.models import Role, User, Genre, Movie, Cinema, Room, Seat, Showtime, Booking, BookingSeat, Payment
 from app.core.security import hash_password
 
 
@@ -86,6 +86,24 @@ def seed_users(db):
             "avatar": "https://images.unsplash.com/photo-1494790108377-be9c29b29330",
             "is_active": True,
         },
+        {
+            "role_id": 2,
+            "full_name": "Nguyen Minh Hoang",
+            "email": "hoang.nguyen@cinema.com",
+            "phone": "0933221100",
+            "password_hash": hash_password("user123"),
+            "avatar": "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde",
+            "is_active": True,
+        },
+        {
+            "role_id": 2,
+            "full_name": "Pham Van Spam (Tai khoan bi khoa)",
+            "email": "spam.bot@cinema.com",
+            "phone": "0911223344",
+            "password_hash": hash_password("user123"),
+            "avatar": "https://images.unsplash.com/photo-1570295999919-56ceb5ecca61",
+            "is_active": False,
+        },
     ]
 
     for u in users_data:
@@ -119,35 +137,35 @@ def seed_genres(db):
 
 
 def seed_movies(db):
-    """4. Seed danh sách phim và gán thể loại"""
+    """4. Seed danh sách phim (gồm 6 phim đang chiếu & 3 phim sắp công chiếu với Poster HD sắc nét)"""
     print("\n--> 5. Dang kiem tra va seed Danh sach phim (Movies)...")
     movies_data = [
         {
             "title": "Mai",
             "slug": "mai-2024",
-            "description": "Cau chuyen tinh cam sau sac, nhieu bien co xoay quanh cuoc doi cua Mai va Duong.",
+            "description": "Câu chuyện tình cảm sâu sắc, nhiều biến cố xoay quanh cuộc đời của Mai và Dương.",
             "duration_minutes": 131,
             "release_date": date(2024, 2, 10),
-            "poster_url": "https://upload.wikimedia.org/wikipedia/vi/4/47/Mai_poster.jpg",
+            "poster_url": "https://upload.wikimedia.org/wikipedia/vi/3/36/Mai_2024_poster.jpg",
             "trailer_url": "https://www.youtube.com/watch?v=0wQv7n38h6g",
             "status": "NOW_SHOWING",
             "genres": ["Tinh Cam", "Tam Ly - Gia Dinh"]
         },
         {
-            "title": "Lat Mat 7: Mot Dieu Uoc",
+            "title": "Lật Mặt 7: Một Điều Ước",
             "slug": "lat-mat-7-mot-dieu-uoc",
-            "description": "Bo phim gia dinh xuc dong ve tinh mau tu thieng lieng cua ba Hai 73 tuoi.",
+            "description": "Bộ phim gia đình xúc động về tình mẫu tử thiêng liêng của bà Hai 73 tuổi cùng những người con.",
             "duration_minutes": 138,
             "release_date": date(2024, 4, 26),
-            "poster_url": "https://upload.wikimedia.org/wikipedia/vi/0/05/Lat_Mat_7_poster.jpg",
-            "trailer_url": "https://www.youtube.com/watch?v=8RjQzQ2Q_54",
+            "poster_url": "https://image.tmdb.org/t/p/original/1K7pHhCZprfDXB7LkCquIK62yCb.jpg",
+            "trailer_url": "https://www.youtube.com/watch?v=d1ZHdosjNX8",
             "status": "NOW_SHOWING",
             "genres": ["Tam Ly - Gia Dinh", "Hai Huoc"]
         },
         {
-            "title": "Dune: Hanh Tinh Cat 2",
+            "title": "Dune: Hành Tinh Cát 2",
             "slug": "dune-part-two",
-            "description": "Paul Atreides lien minh cung Chani va nguoi Fremen tren hanh trinh bao thu dinh menh.",
+            "description": "Paul Atreides liên minh cùng Chani và người Fremen trên hành trình báo thù định mệnh chống lại những kẻ đã hủy diệt gia tộc.",
             "duration_minutes": 166,
             "release_date": date(2024, 3, 1),
             "poster_url": "https://image.tmdb.org/t/p/original/8b8R8l88Qje9dn9OE8PY05Nxl1X.jpg",
@@ -156,9 +174,9 @@ def seed_movies(db):
             "genres": ["Khoa Hoc Vien Tuong", "Hanh Dong"]
         },
         {
-            "title": "Quat Mo Trung Ma (Exhuma)",
+            "title": "Quật Mộ Trùng Ma (Exhuma)",
             "slug": "exhuma-quat-mo-trung-ma",
-            "description": "Hai phap su va thay phong thuy khai quat ngoi mo bi an giai cuu gia toc giau co.",
+            "description": "Hai pháp sư và thầy phong thủy cùng nhau khai quật ngôi mộ bí ẩn nhằm giải cứu một gia tộc giàu có khỏi lời nguyền truyền kiếp.",
             "duration_minutes": 134,
             "release_date": date(2024, 3, 15),
             "poster_url": "https://image.tmdb.org/t/p/original/tMefBSflR6PGQLv7WvFPpKLZkyk.jpg",
@@ -167,12 +185,12 @@ def seed_movies(db):
             "genres": ["Kinh Di"]
         },
         {
-            "title": "Godzilla x Kong: De Che Moi",
+            "title": "Godzilla x Kong: Đế Chế Mới",
             "slug": "godzilla-x-kong-the-new-empire",
-            "description": "Tran chien dinh cao giua Godzilla va Kong chong lai moi de doa an sau trong Trai Dat.",
+            "description": "Trận chiến đỉnh cao giữa hai biểu tượng Godzilla và Kong chống lại mối đe dọa khổng lồ ẩn sâu trong lòng Trái Đất.",
             "duration_minutes": 115,
             "release_date": date(2024, 3, 29),
-            "poster_url": "https://image.tmdb.org/t/p/original/bQ2ywkchCe02AcSnMuVeZ2QIDe.jpg",
+            "poster_url": "https://upload.wikimedia.org/wikipedia/en/b/be/Godzilla_x_kong_the_new_empire_poster.jpg",
             "trailer_url": "https://www.youtube.com/watch?v=lV1OOlGwExg",
             "status": "NOW_SHOWING",
             "genres": ["Hanh Dong", "Khoa Hoc Vien Tuong"]
@@ -180,7 +198,7 @@ def seed_movies(db):
         {
             "title": "Kung Fu Panda 4",
             "slug": "kung-fu-panda-4",
-            "description": "Po tro thanh Thu linh Tinh than cua Thung lung Binh Yen va tim kiem Than Long Dai Hiep moi.",
+            "description": "Gấu Po trở thành Thủ lĩnh Tinh thần của Thung lũng Bình Yên và bước vào hành trình tìm kiếm một Thần Long Đại Hiệp mới kế vị.",
             "duration_minutes": 94,
             "release_date": date(2024, 3, 8),
             "poster_url": "https://image.tmdb.org/t/p/original/kDp1vUBnMpe8ak4rjgl3cLELqjU.jpg",
@@ -188,23 +206,48 @@ def seed_movies(db):
             "status": "NOW_SHOWING",
             "genres": ["Hoat Hinh", "Hai Huoc", "Hanh Dong"]
         },
+        # --- 3 PHIM SAP CONG CHIEU (COMING_SOON) VOI POSTER HD SAC NET ---
         {
-            "title": "Conan: Ngoi Sao 5 Canh 1 Trieu Do",
-            "slug": "conan-ngoi-sao-5-canh-1-trieu-do",
-            "description": "Cuoc ruot duoi tranh doat thanh kiem giua Sieu dao chich Kid, Hattori va Conan.",
-            "duration_minutes": 110,
-            "release_date": date.today() + timedelta(days=14),
-            "poster_url": "https://image.tmdb.org/t/p/original/7kAC1R8gE7o9U9zW3l3Z5Y2mB1.jpg",
-            "trailer_url": "https://www.youtube.com/watch?v=conan_trailer",
+            "title": "Deadpool & Wolverine",
+            "slug": "deadpool-and-wolverine",
+            "description": "Sự kết hợp lịch sử và đầy bùng nổ giữa hai dị nhân biểu tượng của Marvel trong chuyến phiêu lưu đa vũ trụ đầy bất ngờ và hài hước.",
+            "duration_minutes": 128,
+            "release_date": date.today() + timedelta(days=12),
+            "poster_url": "https://image.tmdb.org/t/p/original/8cdWjvZQUExUUTzyp4t6EDMubfO.jpg",
+            "trailer_url": "https://www.youtube.com/watch?v=73_1biulkYk",
             "status": "COMING_SOON",
-            "genres": ["Hoat Hinh", "Hanh Dong"]
+            "genres": ["Hanh Dong", "Hai Huoc", "Khoa Hoc Vien Tuong"]
+        },
+        {
+            "title": "Moana 2: Hành Trình Biển Cả",
+            "slug": "moana-2-hanh-trinh-bien-ca",
+            "description": "Moana cùng á thần Maui bước vào hành trình thám hiểm đại dương bao la đầy hiểm nguy và kỳ vĩ với những vùng biển chưa từng được khám phá.",
+            "duration_minutes": 100,
+            "release_date": date.today() + timedelta(days=19),
+            "poster_url": "https://image.tmdb.org/t/p/original/yh64qw9mgXBvlaWDi7Q9tpUBAvH.jpg",
+            "trailer_url": "https://www.youtube.com/watch?v=hDZ7y8RP5HE",
+            "status": "COMING_SOON",
+            "genres": ["Hoat Hinh", "Hai Huoc"]
+        },
+        {
+            "title": "Võ Sĩ Giác Đấu II (Gladiator II)",
+            "slug": "gladiator-2-vo-si-giac-dau",
+            "description": "Trường thiên sử thi rực lửa tại đấu trường La Mã cổ đại nối tiếp huyền thoại điện ảnh từng đoạt giải Oscar danh giá năm 2000.",
+            "duration_minutes": 148,
+            "release_date": date.today() + timedelta(days=32),
+            "poster_url": "https://image.tmdb.org/t/p/original/2cxhvwyEwRlysAmRH4iodkvo0z5.jpg",
+            "trailer_url": "https://www.youtube.com/watch?v=4rgYUipGJNo",
+            "status": "COMING_SOON",
+            "genres": ["Hanh Dong", "Tam Ly - Gia Dinh"]
         }
     ]
 
     for m_info in movies_data:
-        existing = db.query(Movie).filter(Movie.slug == m_info["slug"]).first()
+        genre_names = m_info.pop("genres")
+        existing = db.query(Movie).filter(
+            (Movie.slug == m_info["slug"]) | (Movie.title.ilike(f"%{m_info['title']}%"))
+        ).first()
         if not existing:
-            genre_names = m_info.pop("genres")
             movie = Movie(**m_info)
             for g_name in genre_names:
                 g_obj = db.query(Genre).filter(Genre.name == g_name).first()
@@ -212,6 +255,17 @@ def seed_movies(db):
                     movie.genres.append(g_obj)
             db.add(movie)
             print(f"    + Da them phim: {m_info['title']} ({m_info['duration_minutes']} phut) - {m_info['status']}")
+        else:
+            # Cập nhật tên có dấu tiếng Việt
+            if m_info.get("title"):
+                existing.title = m_info["title"]
+            # An toàn: Không tự ý ghi đè poster_url nếu phim đã có poster trong CSDL
+            if not existing.poster_url:
+                existing.poster_url = m_info["poster_url"]
+            # Không ghi đè trailer nếu phim đã có trailer
+            if not existing.trailer_url and m_info.get("trailer_url"):
+                existing.trailer_url = m_info["trailer_url"]
+            print(f"    ~ Giữ nguyên dữ liệu & poster của phim đã có: {existing.title}")
     db.commit()
     print("    [OK] Hoan thanh seed Phim.")
 
@@ -389,6 +443,123 @@ def seed_showtimes_7days(db):
     print(f"    [OK] Hoan thanh seed {total_showtimes_created} Suat chieu cho ca 7 ngay!")
 
 
+def seed_sample_bookings(db):
+    """7. Seed đơn vé mẫu đa dạng phục vụ kiểm thử tính năng Quản lý Đơn vé (SRS 1.3)"""
+    print("\n--> 8. Dang kiem tra va seed Don ve mau (Bookings)...")
+    existing_count = db.query(Booking).count()
+    if existing_count > 0:
+        print(f"    [i] Da co {existing_count} don ve trong database, bo qua seed don ve.")
+        return
+
+    users = db.query(User).all()
+    showtimes = db.query(Showtime).all()
+
+    if not users or not showtimes:
+        print("    [!] Chua du User hoac Showtime de seed don ve.")
+        return
+
+    sample_bookings_meta = [
+        {"user_idx": 2, "st_idx": 0, "status": "DA_THANH_TOAN", "method": "MOMO", "code": "BK-9842"},
+        {"user_idx": 3, "st_idx": 1, "status": "DA_THANH_TOAN", "method": "VNPAY", "code": "BK-9841"},
+        {"user_idx": 1, "st_idx": 2, "status": "GIU_CHO", "method": "Thẻ ATM", "code": "BK-9840"},
+        {"user_idx": 2, "st_idx": 3, "status": "DA_HUY", "method": "Tiền mặt", "code": "BK-9839"},
+        {"user_idx": 3, "st_idx": 4, "status": "DA_THANH_TOAN", "method": "VNPAY", "code": "BK-9838"},
+    ]
+
+    for idx, meta in enumerate(sample_bookings_meta):
+        u = users[meta["user_idx"] % len(users)]
+        st = showtimes[meta["st_idx"] % len(showtimes)]
+
+        room_seats = db.query(Seat).filter(Seat.room_id == st.room_id).all()
+        chosen_seats = room_seats[idx * 2: idx * 2 + 2] if len(room_seats) >= (idx * 2 + 2) else room_seats[:2]
+
+        total_p = sum(float(st.price) * (1.3 if s.seat_type == 'vip' else 1.0) for s in chosen_seats)
+        b = Booking(
+            booking_code=meta["code"],
+            user_id=u.id,
+            showtime_id=st.id,
+            total_price=Decimal(total_p),
+            status=meta["status"],
+            held_until=datetime.utcnow() + timedelta(minutes=10) if meta["status"] == "GIU_CHO" else None,
+            created_at=datetime.utcnow() - timedelta(hours=idx * 5 + 1),
+            updated_at=datetime.utcnow()
+        )
+        db.add(b)
+        db.flush()
+
+        if meta["status"] != "DA_HUY":
+            for s in chosen_seats:
+                bs = BookingSeat(
+                    booking_id=b.id,
+                    showtime_id=st.id,
+                    seat_id=s.id,
+                    price=Decimal(st.price) * Decimal(1.3 if s.seat_type == 'vip' else 1.0)
+                )
+                db.add(bs)
+
+        p = Payment(
+            booking_id=b.id,
+            amount=Decimal(total_p),
+            payment_method=meta["method"],
+            status="SUCCESS" if meta["status"] == "DA_THANH_TOAN" else "PENDING",
+            payment_time=b.created_at
+        )
+        db.add(p)
+
+    db.commit()
+    print("    [OK] Da seed 5 don ve mau thanh cong!")
+
+
+def seed_combos(db):
+    """8. Seed Combo bắp nước mẫu (Task T3C72E6: [Bonus] Combo bắp nước)"""
+    print("\n--> 9. Dang kiem tra va seed Combo bap nuoc...")
+    from app.models.combo import Combo
+    if db.query(Combo).count() > 0:
+        print("    [i] Da co combo bap nuoc trong database, bo qua seed.")
+        return
+
+    sample_combos = [
+        Combo(
+            name="Combo Solo",
+            description="1 Bắp ngọt lớn (64oz) + 1 Nước ngọt có gas lớn (32oz)",
+            price=Decimal("79000.00"),
+            image_url="https://images.unsplash.com/photo-1572177191856-3cde618dee1f?w=400",
+            is_active=True,
+        ),
+        Combo(
+            name="Combo Couple",
+            description="1 Bắp phô mai đặc biệt (64oz) + 2 Nước ngọt có gas lớn (32oz)",
+            price=Decimal("109000.00"),
+            image_url="https://images.unsplash.com/photo-1585647347483-22b66260dfff?w=400",
+            is_active=True,
+        ),
+        Combo(
+            name="Combo Party",
+            description="2 Bắp caramel giòn rụm + 3 Nước ngọt có gas + 1 Snack khoai tây",
+            price=Decimal("159000.00"),
+            image_url="https://images.unsplash.com/photo-1512149177596-f817c7ef5d4c?w=400",
+            is_active=True,
+        ),
+        Combo(
+            name="Bắp Rang Bơ Truyền Thống",
+            description="Bắp rang bơ thơm lừng, giòn tan cỡ lớn 64oz",
+            price=Decimal("45000.00"),
+            image_url="https://images.unsplash.com/photo-1578849278619-e73505e9610f?w=400",
+            is_active=True,
+        ),
+        Combo(
+            name="Nước Ngọt Có Gas Lớn (32oz)",
+            description="Coca-Cola / Sprite / Fanta mát lạnh sảng khoái",
+            price=Decimal("35000.00"),
+            image_url="https://images.unsplash.com/photo-1622483767028-3f66f32aef97?w=400",
+            is_active=True,
+        ),
+    ]
+    db.add_all(sample_combos)
+    db.commit()
+    print(f"    [OK] Da seed {len(sample_combos)} combo bap nuoc thanh cong!")
+
+
 def main():
     try:
         init_database()
@@ -400,6 +571,8 @@ def main():
             seed_movies(db)
             seed_cinemas_and_rooms(db)
             seed_showtimes_7days(db)
+            seed_sample_bookings(db)
+            seed_combos(db)
             print("\n==================================================================")
             print("SEED TOAN BO DU LIEU MAU CHO CA NHOM THANH CONG!")
             print("==================================================================")

@@ -32,7 +32,6 @@ def override_get_db():
         db.close()
 
 
-app.dependency_overrides[get_db] = override_get_db
 client = TestClient(app)
 
 
@@ -63,6 +62,7 @@ class TestCinemasAndRooms(unittest.TestCase):
 
     def tearDown(self):
         Base.metadata.drop_all(bind=engine)
+        app.dependency_overrides.clear()
 
     def test_get_all_cinemas(self):
         response = client.get("/api/cinemas")
