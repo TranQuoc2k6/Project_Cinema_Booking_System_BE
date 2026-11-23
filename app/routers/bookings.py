@@ -44,6 +44,7 @@ def hold_seats(
         seat_ids=payload.seat_ids,
         user_id=current_user.id,
         db=db,
+        combos=getattr(payload, "combos", None),
     )
     return booking
 
@@ -63,12 +64,14 @@ def confirm_booking_by_id(
     """API xác nhận đặt vé theo ID đơn vé trong URL"""
     payment_method = payload.payment_method if payload else "MOMO"
     transaction_id = payload.transaction_id if payload else None
+    combos = payload.combos if payload else None
     return booking_service.confirm_booking(
         db=db,
         user=current_user,
         booking_id=booking_id,
         payment_method=payment_method,
         transaction_id=transaction_id,
+        combos=combos,
     )
 
 
@@ -91,6 +94,7 @@ def confirm_booking_by_payload(
         booking_code=payload.booking_code,
         payment_method=payload.payment_method or "MOMO",
         transaction_id=payload.transaction_id,
+        combos=payload.combos,
     )
 
 

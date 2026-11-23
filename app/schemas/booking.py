@@ -16,6 +16,7 @@ from enum import Enum
 from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
+from app.schemas.combo import BookingComboItemRequest, BookingComboResponse
 
 
 # ---------------------------------------------------------------------------
@@ -72,6 +73,10 @@ class BookingCreate(BaseModel):
         ..., min_length=1, max_length=8,
         description="Danh sách ID ghế muốn đặt (tối đa 8 ghế/lần)",
     )
+    combos:      Optional[List[BookingComboItemRequest]] = Field(
+        default=None,
+        description="Danh sách combo bắp nước chọn mua kèm (Task T3C72E6)",
+    )
 
 
 class BookingResponse(BaseModel):
@@ -90,8 +95,9 @@ class BookingResponse(BaseModel):
 
 
 class BookingDetailResponse(BookingResponse):
-    """Chi tiết booking kèm danh sách ghế đã đặt."""
+    """Chi tiết booking kèm danh sách ghế và combo bắp nước đã đặt."""
     booking_seats: List[BookingSeatResponse] = []
+    booking_combos: List[BookingComboResponse] = []
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -193,6 +199,7 @@ class MyTicketResponse(BaseModel):
     cancel_reason: Optional[str] = None
     is_checked_in: bool = False
     checked_in_at: Optional[datetime] = None
+    combos: List[BookingComboResponse] = []
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -228,6 +235,7 @@ class BookingConfirmRequest(BaseModel):
     booking_code: Optional[str] = Field(None, description="Mã đơn vé (BK-...)")
     payment_method: Optional[str] = Field("MOMO", description="Phương thức: VNPAY | MOMO | ZALOPAY | CASH | BANKING")
     transaction_id: Optional[str] = Field(None, description="Mã giao dịch ngân hàng / ví điện tử nếu có")
+    combos: Optional[List[BookingComboItemRequest]] = Field(None, description="Danh sách combo bắp nước muốn cập nhật/thêm (Task T3C72E6)")
 
 
 class BookingConfirmResponse(BaseModel):
