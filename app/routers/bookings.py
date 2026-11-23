@@ -13,6 +13,8 @@ from app.schemas.booking import (
     BookingHoldResponse,
     CleanExpiredResponse,
     MyTicketResponse,
+    TicketCheckInResponse,
+    TicketVerifyResponse,
     UserCancelBookingResponse,
 )
 from app.services import booking_service
@@ -215,3 +217,38 @@ def cancel_ticket_put_alias(
         user=current_user,
         booking_id=booking_id,
     )
+
+
+# ---------------------------------------------------------------------------
+# QR Ticket Verification & Check-in Endpoints (Task T3C72CC)
+# ---------------------------------------------------------------------------
+
+@router.get(
+    "/ticket-check/{booking_code}",
+    response_model=TicketVerifyResponse,
+    summary="Tra cứu vé điện tử khi quét mã QR (Task T3C72CC)",
+)
+def verify_ticket_qr(
+    booking_code: str,
+    db: Session = Depends(get_db),
+):
+    return booking_service.verify_ticket_by_code(
+        db=db,
+        booking_code=booking_code,
+    )
+
+
+@router.post(
+    "/ticket-check/{booking_code}/checkin",
+    response_model=TicketCheckInResponse,
+    summary="Xác nhận vào rạp / Soát vé khi quét QR (Task T3C72CC)",
+)
+def checkin_ticket_qr(
+    booking_code: str,
+    db: Session = Depends(get_db),
+):
+    return booking_service.checkin_ticket_by_code(
+        db=db,
+        booking_code=booking_code,
+    )
+

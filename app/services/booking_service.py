@@ -436,6 +436,8 @@ def format_ticket_response(b: Booking, now: Optional[datetime] = None) -> Dict[s
         "can_cancel": can_cancel,
         "cancel_deadline": cancel_deadline,
         "cancel_reason": cancel_reason,
+        "is_checked_in": getattr(b, "is_checked_in", False) or False,
+        "checked_in_at": getattr(b, "checked_in_at", None),
     }
 
 
@@ -858,3 +860,191 @@ def admin_cancel_booking(db: Session, booking_id: int) -> Dict[str, Any]:
         "new_status": "cancelled",
         "released_seats": released_seats
     }
+
+
+def verify_ticket_by_code(db: Session, booking_code: str) -> Dict[str, Any]:
+    """
+    Tra cứu thông tin vé điện tử khi quét mã QR (Task T3C72CC).
+    Cho phép tra cứu công khai hoặc từ trang soát vé:
+    - Hiển thị đầy đủ phim, rạp, phòng, suất chiếu, ghế, người đặt, trạng thái thanh toán.
+    - Kiểm tra điều kiện hợp lệ để vào rạp (is_valid_for_entry).
+    - Hiển thị trạng thái đã check-in hay chưa.
+    """
+    now = datetime.utcnow()
+    clean_code = (booking_code or "").strip().upper()
+
+    booking = db.query(Booking).filter(func.upper(Booking.booking_code) == clean_code).first()
+    if not booking:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Không tìm thấy vé xem phim với mã '{booking_code}'."
+        )
+
+    st = booking.showtime
+    movie = st.movie if st else None
+    room = st.room if st else None
+    cinema = room.cinema if room else None
+
+    # Xác định payment status
+    payment_status = "PENDING"
+    if booking.status == "DA_THANH_TOAN":
+        payment_status = "PAID"
+    elif booking.status == "DA_HUY":
+        payment_status = "CANCELLED"
+    elif booking.status == "HET_HAN":
+        payment_status = "EXPIRED"
+
+    # Trạng thái check-in
+    is_checked_in = bool(getattr(booking, "is_checked_in", False))
+    checked_in_at = getattr(booking, "checked_in_at", None)
+
+    # Điều kiện hợp lệ để vào rạp:
+    # 1. Đã thanh toán thành công
+    # 2. Chưa từng soát vé (chống dùng lại)
+    # 3. Suất chiếu chưa kết thúc quá lâu (nếu có end_time)
+    is_valid_for_entry = (
+        booking.status == "DA_THANH_TOAN" and
+        not is_checked_in and
+        (not st or not st.end_time or st.end_time >= now - timedelta(hours=1))
+    )
+
+    # Danh sách ghế
+    seats_list = []
+    for bs in booking.booking_seats:
+        s_obj = bs.seat
+        seats_list.append({
+            "seat_id": bs.seat_id,
+            "seat_number": s_obj.seat_number if s_obj else f"ID {bs.seat_id}",
+            "seat_row": s_obj.seat_row if s_obj else None,
+            "seat_column": s_obj.seat_column if s_obj else None,
+            "seat_type": s_obj.seat_type if s_obj else "standard",
+            "price": bs.price,
+        })
+
+    # Mặt nạ số điện thoại khách hàng bảo vệ quyền riêng tư
+    customer_phone_masked = None
+    customer_name = None
+    if booking.user:
+        customer_name = booking.user.full_name
+        phone = booking.user.phone
+        if phone and len(phone) >= 7:
+            customer_phone_masked = f"{phone[:3]}****{phone[-3:]}"
+        else:
+            customer_phone_masked = phone
+
+    return {
+        "success": True,
+        "booking_id": booking.id,
+        "booking_code": booking.booking_code,
+        "status": booking.status,
+        "payment_status": payment_status,
+        "total_price": booking.total_price,
+        "created_at": booking.created_at,
+        "is_checked_in": is_checked_in,
+        "checked_in_at": checked_in_at,
+        "is_valid_for_entry": is_valid_for_entry,
+        "customer_name": customer_name,
+        "customer_phone_masked": customer_phone_masked,
+        "movie": {
+            "id": movie.id if movie else 0,
+            "title": movie.title if movie else "Tên phim",
+            "poster_url": movie.poster_url if movie else None,
+            "duration_minutes": movie.duration_minutes if movie else 120,
+        },
+        "showtime": {
+            "id": st.id if st else 0,
+            "start_time": st.start_time if st else now,
+            "end_time": st.end_time if st else now,
+            "room_name": room.name if room else "Phòng chiếu",
+            "room_type": room.room_type if room else "2D",
+        },
+        "cinema": {
+            "id": cinema.id if cinema else 0,
+            "name": cinema.name if cinema else "Rạp chiếu phim",
+            "address": cinema.address if cinema else None,
+            "city": cinema.city if cinema else None,
+        },
+        "seats": seats_list,
+        "qr_verify_url": f"/pages/ticket-check.html?code={booking.booking_code}"
+    }
+
+
+def checkin_ticket_by_code(db: Session, booking_code: str) -> Dict[str, Any]:
+    """
+    Xác nhận vé vào rạp / Soát vé khi quét QR (Task T3C72CC).
+    Quy tắc nghiệp vụ:
+    - Vé phải tồn tại trong CSDL.
+    - Vé phải ở trạng thái DA_THANH_TOAN.
+    - Chống quét trùng (Duplicate Check-in): Nếu đã check-in rồi -> Báo lỗi kèm thời gian đã soát.
+    - Nếu vé DA_HUY hoặc HET_HAN -> Từ chối soát vé.
+    - Khi hợp lệ: Cập nhật is_checked_in = True, ghi nhận checked_in_at.
+    """
+    now = datetime.utcnow()
+    clean_code = (booking_code or "").strip().upper()
+
+    booking = db.query(Booking).filter(func.upper(Booking.booking_code) == clean_code).first()
+    if not booking:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Không tìm thấy vé với mã '{booking_code}'."
+        )
+
+    # 1. Kiểm tra trạng thái đã hủy
+    if booking.status == "DA_HUY":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="VÉ KHÔNG HỢP LỆ: Đơn vé này đã bị hủy trước đó và ghế đã được hoàn trả!"
+        )
+
+    # 2. Kiểm tra trạng thái hết hạn
+    if booking.status == "HET_HAN":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="VÉ KHÔNG HỢP LỆ: Đơn vé này đã hết hạn giữ chỗ và chưa được thanh toán!"
+        )
+
+    # 3. Kiểm tra trạng thái chưa thanh toán
+    if booking.status == "GIU_CHO":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="VÉ CHƯA THANH TOÁN: Khách hàng chưa hoàn tất thanh toán cho đơn vé này."
+        )
+
+    # 4. Chống quét vé lần 2 (Anti-fraud / Duplicate Check-in)
+    if getattr(booking, "is_checked_in", False):
+        check_time_str = booking.checked_in_at.strftime("%H:%M:%S ngày %d/%m/%Y") if booking.checked_in_at else "trước đó"
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"CẢNH BÁO: Vé #{booking.booking_code} ĐÃ ĐƯỢC SOÁT VÀO RẠP lúc {check_time_str}! Không thể tái sử dụng vé."
+        )
+
+    # 5. Cập nhật check-in thành công
+    booking.is_checked_in = True
+    booking.checked_in_at = now
+    booking.updated_at = now
+    db.commit()
+    db.refresh(booking)
+
+    # Thu thập thông tin phòng, rạp, ghế
+    st = booking.showtime
+    movie = st.movie if st else None
+    room = st.room if st else None
+    cinema = room.cinema if room else None
+
+    seat_names = []
+    for bs in booking.booking_seats:
+        s_obj = bs.seat
+        seat_names.append(s_obj.seat_number if s_obj else f"ID {bs.seat_id}")
+
+    return {
+        "success": True,
+        "message": f"Xác nhận vé thành công! Quý khách có thể vào {room.name if room else 'phòng chiếu'}.",
+        "booking_code": booking.booking_code,
+        "checked_in_at": now,
+        "movie_title": movie.title if movie else "Tên phim",
+        "room_name": room.name if room else "Phòng chiếu",
+        "cinema_name": cinema.name if cinema else "Rạp chiếu phim",
+        "seats": seat_names,
+        "total_seats": len(seat_names)
+    }
+
