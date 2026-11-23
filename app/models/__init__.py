@@ -10,6 +10,7 @@ from app.models.showtime import Showtime
 from app.models.booking import Booking
 from app.models.booking_seat import BookingSeat
 from app.models.payment import Payment
+from app.models.review import Review
 
 __all__ = [
     "Base",
@@ -25,4 +26,5 @@ __all__ = [
     "Booking",
     "BookingSeat",
     "Payment",
+    "Review",
 ]

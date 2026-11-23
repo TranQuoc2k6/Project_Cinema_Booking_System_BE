@@ -174,6 +174,9 @@ def get_movie_by_id(db: Session, movie_id: int):
     now = datetime.now()
     movie_status = get_movie_status(movie, today, now)
 
+    from app.services.review_service import get_movie_rating_stats
+    avg_score, total_reviews, _ = get_movie_rating_stats(db, movie.id)
+
     return {
         "id": movie.id,
         "title": movie.title,
@@ -183,7 +186,9 @@ def get_movie_by_id(db: Session, movie_id: int):
         "release_date": movie.release_date,
         "poster_url": movie.poster_url,
         "trailer_url": movie.trailer_url,
-        "status": movie_status
+        "status": movie_status,
+        "average_rating": avg_score,
+        "total_reviews": total_reviews,
     }
 
 

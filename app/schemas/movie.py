@@ -72,6 +72,8 @@ class MovieItemResponse(BaseModel):
     poster_url: Optional[str] = None
     trailer_url: Optional[str] = None
     status: Optional[str] = None
+    average_rating: Optional[float] = 0.0
+    total_reviews: Optional[int] = 0
 
     model_config = ConfigDict(from_attributes=True)
 

@@ -20,3 +20,6 @@ class User(Base):
 
     # Mối quan hệ N-1 với Role
     role = relationship("Role", back_populates="users")
+
+    # Mối quan hệ 1-N với Đánh giá phim (Reviews)
+    reviews = relationship("Review", back_populates="user", cascade="all, delete-orphan")

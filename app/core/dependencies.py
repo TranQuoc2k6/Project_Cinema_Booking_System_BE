@@ -80,6 +80,29 @@ def get_current_user(
         )
     return user
 
+
+def get_optional_current_user(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
+    db: Session = Depends(get_db),
+) -> Optional[User]:
+    """Đọc header Authorization nếu có, trả về User hoặc None nếu chưa đăng nhập hoặc token sai."""
+    if credentials is None or not credentials.credentials:
+        return None
+    try:
+        payload = jwt.decode(
+            credentials.credentials,
+            settings.SECRET_KEY,
+            algorithms=[settings.ALGORITHM],
+        )
+        user_id = int(payload.get("sub"))
+        user = db.query(User).filter(User.id == user_id).first()
+        if user and user.is_active:
+            return user
+        return None
+    except Exception:
+        return None
+
+
 # Phân quyền ADMIN. Role đọc từ DB (không tin claim trong token).
 def require_admin(current_user: User = Depends(get_current_user)) -> User:
     """Chỉ cho phép role ADMIN. Role đọc từ DB (không tin claim trong token)."""
