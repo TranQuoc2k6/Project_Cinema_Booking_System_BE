@@ -146,7 +146,7 @@ def seed_movies(db):
             "description": "Câu chuyện tình cảm sâu sắc, nhiều biến cố xoay quanh cuộc đời của Mai và Dương.",
             "duration_minutes": 131,
             "release_date": date(2024, 2, 10),
-            "poster_url": "https://images.unsplash.com/photo-1534447677768-be436bb09401?w=800&auto=format&fit=crop&q=80",
+            "poster_url": "https://upload.wikimedia.org/wikipedia/vi/3/36/Mai_2024_poster.jpg",
             "trailer_url": "https://www.youtube.com/watch?v=0wQv7n38h6g",
             "status": "NOW_SHOWING",
             "genres": ["Tinh Cam", "Tam Ly - Gia Dinh"]
@@ -157,8 +157,8 @@ def seed_movies(db):
             "description": "Bộ phim gia đình xúc động về tình mẫu tử thiêng liêng của bà Hai 73 tuổi cùng những người con.",
             "duration_minutes": 138,
             "release_date": date(2024, 4, 26),
-            "poster_url": "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=800&auto=format&fit=crop&q=80",
-            "trailer_url": "https://www.youtube.com/watch?v=8RjQzQ2Q_54",
+            "poster_url": "https://image.tmdb.org/t/p/original/1K7pHhCZprfDXB7LkCquIK62yCb.jpg",
+            "trailer_url": "https://www.youtube.com/watch?v=d1ZHdosjNX8",
             "status": "NOW_SHOWING",
             "genres": ["Tam Ly - Gia Dinh", "Hai Huoc"]
         },
@@ -190,7 +190,7 @@ def seed_movies(db):
             "description": "Trận chiến đỉnh cao giữa hai biểu tượng Godzilla và Kong chống lại mối đe dọa khổng lồ ẩn sâu trong lòng Trái Đất.",
             "duration_minutes": 115,
             "release_date": date(2024, 3, 29),
-            "poster_url": "https://images.unsplash.com/photo-1578632767115-351597cf2477?w=800&auto=format&fit=crop&q=80",
+            "poster_url": "https://upload.wikimedia.org/wikipedia/en/b/be/Godzilla_x_kong_the_new_empire_poster.jpg",
             "trailer_url": "https://www.youtube.com/watch?v=lV1OOlGwExg",
             "status": "NOW_SHOWING",
             "genres": ["Hanh Dong", "Khoa Hoc Vien Tuong"]
@@ -244,7 +244,9 @@ def seed_movies(db):
 
     for m_info in movies_data:
         genre_names = m_info.pop("genres")
-        existing = db.query(Movie).filter(Movie.slug == m_info["slug"]).first()
+        existing = db.query(Movie).filter(
+            (Movie.slug == m_info["slug"]) | (Movie.title.ilike(f"%{m_info['title']}%"))
+        ).first()
         if not existing:
             movie = Movie(**m_info)
             for g_name in genre_names:
@@ -254,13 +256,16 @@ def seed_movies(db):
             db.add(movie)
             print(f"    + Da them phim: {m_info['title']} ({m_info['duration_minutes']} phut) - {m_info['status']}")
         else:
-            # Cập nhật thông tin và poster HD mới nhất
-            existing.title = m_info["title"]
-            existing.poster_url = m_info["poster_url"]
-            existing.status = m_info["status"]
-            existing.release_date = m_info["release_date"]
-            existing.description = m_info["description"]
-            print(f"    ~ Da cap nhat poster HD: {m_info['title']} - {m_info['status']}")
+            # Cập nhật tên có dấu tiếng Việt
+            if m_info.get("title"):
+                existing.title = m_info["title"]
+            # An toàn: Không tự ý ghi đè poster_url nếu phim đã có poster trong CSDL
+            if not existing.poster_url:
+                existing.poster_url = m_info["poster_url"]
+            # Không ghi đè trailer nếu phim đã có trailer
+            if not existing.trailer_url and m_info.get("trailer_url"):
+                existing.trailer_url = m_info["trailer_url"]
+            print(f"    ~ Giữ nguyên dữ liệu & poster của phim đã có: {existing.title}")
     db.commit()
     print("    [OK] Hoan thanh seed Phim.")
 
