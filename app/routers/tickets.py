@@ -12,7 +12,12 @@ from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_current_user, get_db
 from app.models.user import User
-from app.schemas.booking import MyTicketResponse, UserCancelBookingResponse
+from app.schemas.booking import (
+    MyTicketResponse,
+    TicketCheckInResponse,
+    TicketVerifyResponse,
+    UserCancelBookingResponse,
+)
 from app.services import booking_service
 
 router = APIRouter(prefix="/api/tickets", tags=["Tickets"])
@@ -84,3 +89,40 @@ def cancel_ticket(
         user=current_user,
         booking_id=booking_id,
     )
+
+
+# ---------------------------------------------------------------------------
+# QR Ticket Verification & Check-in Endpoints (Task T3C72CC)
+# ---------------------------------------------------------------------------
+
+@router.get(
+    "/verify/{booking_code}",
+    response_model=TicketVerifyResponse,
+    summary="Tra cứu & Xác thực vé khi quét mã QR (Task T3C72CC)",
+    description="Tra cứu thông tin vé qua mã vé (booking_code) khi người dùng hoặc nhân viên quét mã QR trên vé.",
+)
+def verify_ticket_qr(
+    booking_code: str,
+    db: Session = Depends(get_db),
+):
+    return booking_service.verify_ticket_by_code(
+        db=db,
+        booking_code=booking_code,
+    )
+
+
+@router.post(
+    "/verify/{booking_code}/checkin",
+    response_model=TicketCheckInResponse,
+    summary="Xác nhận vào rạp / Soát vé khi quét QR (Task T3C72CC)",
+    description="Nhân viên soát vé bấm xác nhận cho khách vào rạp sau khi quét mã QR. Chống quét vé trùng lặp.",
+)
+def checkin_ticket_qr(
+    booking_code: str,
+    db: Session = Depends(get_db),
+):
+    return booking_service.checkin_ticket_by_code(
+        db=db,
+        booking_code=booking_code,
+    )
+

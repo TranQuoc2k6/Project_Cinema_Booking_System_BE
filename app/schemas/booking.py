@@ -191,6 +191,8 @@ class MyTicketResponse(BaseModel):
     can_cancel: bool = False
     cancel_deadline: Optional[datetime] = None
     cancel_reason: Optional[str] = None
+    is_checked_in: bool = False
+    checked_in_at: Optional[datetime] = None
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -249,4 +251,52 @@ class CleanExpiredResponse(BaseModel):
     expired_bookings_count: int = Field(..., description="Số đơn giữ chỗ quá hạn đã chuyển sang HET_HAN")
     released_seats_count: int = Field(..., description="Số ghế đã được giải phóng trả về trạng thái trống")
     message: str
+
+
+# ---------------------------------------------------------------------------
+# QR Ticket Verification & Check-in Schemas (Task T3C72CC)
+# ---------------------------------------------------------------------------
+
+class TicketVerifySeatInfo(BaseModel):
+    seat_id: int
+    seat_number: str
+    seat_row: Optional[str] = None
+    seat_column: Optional[int] = None
+    seat_type: Optional[str] = "standard"
+    price: Decimal
+
+
+class TicketVerifyResponse(BaseModel):
+    """Thông tin tra cứu vé điện tử khi quét mã QR"""
+    success: bool = True
+    booking_id: int
+    booking_code: str
+    status: str                             # GIU_CHO, DA_THANH_TOAN, DA_HUY, HET_HAN
+    payment_status: str                     # PAID, PENDING, CANCELLED, EXPIRED
+    total_price: Decimal
+    created_at: datetime
+    is_checked_in: bool = False
+    checked_in_at: Optional[datetime] = None
+    is_valid_for_entry: bool = False         # Hợp lệ vào rạp: DA_THANH_TOAN và chưa check-in
+    customer_name: Optional[str] = None
+    customer_phone_masked: Optional[str] = None
+    movie: dict
+    showtime: dict
+    cinema: dict
+    seats: List[TicketVerifySeatInfo]
+    qr_verify_url: Optional[str] = None
+
+
+class TicketCheckInResponse(BaseModel):
+    """Kết quả sau khi nhân viên quét QR soát vé vào rạp"""
+    success: bool = True
+    message: str
+    booking_code: str
+    checked_in_at: datetime
+    movie_title: str
+    room_name: str
+    cinema_name: str
+    seats: List[str]
+    total_seats: int
+
 

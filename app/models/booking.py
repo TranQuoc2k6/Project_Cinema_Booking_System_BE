@@ -9,7 +9,7 @@ Trạng thái (status):
 """
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, Column, DateTime, ForeignKey, Integer, Numeric, String
+from sqlalchemy import Boolean, CheckConstraint, Column, DateTime, ForeignKey, Integer, Numeric, String
 from sqlalchemy.orm import relationship
 
 from database import Base
@@ -50,6 +50,19 @@ class Booking(Base):
         DateTime,
         nullable=True,
         comment="Thời điểm hết hạn giữ chỗ (NULL sau khi thanh toán hoặc hủy)",
+    )
+
+    # Trạng thái soát vé vào rạp qua mã QR (Task T3C72CC)
+    is_checked_in = Column(
+        Boolean,
+        default=False,
+        nullable=False,
+        comment="Trạng thái đã soát vé vào rạp hay chưa (quét QR)",
+    )
+    checked_in_at = Column(
+        DateTime,
+        nullable=True,
+        comment="Thời điểm nhân viên quét QR soát vé vào rạp",
     )
 
     # Timestamps
