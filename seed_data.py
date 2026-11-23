@@ -143,7 +143,7 @@ def seed_movies(db):
         {
             "title": "Mai",
             "slug": "mai-2024",
-            "description": "Cau chuyen tinh cam sau sac, nhieu bien co xoay quanh cuoc doi cua Mai va Duong.",
+            "description": "Câu chuyện tình cảm sâu sắc, nhiều biến cố xoay quanh cuộc đời của Mai và Dương.",
             "duration_minutes": 131,
             "release_date": date(2024, 2, 10),
             "poster_url": "https://images.unsplash.com/photo-1534447677768-be436bb09401?w=800&auto=format&fit=crop&q=80",
@@ -152,9 +152,9 @@ def seed_movies(db):
             "genres": ["Tinh Cam", "Tam Ly - Gia Dinh"]
         },
         {
-            "title": "Lat Mat 7: Mot Dieu Uoc",
+            "title": "Lật Mặt 7: Một Điều Ước",
             "slug": "lat-mat-7-mot-dieu-uoc",
-            "description": "Bo phim gia dinh xuc dong ve tinh mau tu thieng lieng cua ba Hai 73 tuoi.",
+            "description": "Bộ phim gia đình xúc động về tình mẫu tử thiêng liêng của bà Hai 73 tuổi cùng những người con.",
             "duration_minutes": 138,
             "release_date": date(2024, 4, 26),
             "poster_url": "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=800&auto=format&fit=crop&q=80",
@@ -163,9 +163,9 @@ def seed_movies(db):
             "genres": ["Tam Ly - Gia Dinh", "Hai Huoc"]
         },
         {
-            "title": "Dune: Hanh Tinh Cat 2",
+            "title": "Dune: Hành Tinh Cát 2",
             "slug": "dune-part-two",
-            "description": "Paul Atreides lien minh cung Chani va nguoi Fremen tren hanh trinh bao thu dinh menh.",
+            "description": "Paul Atreides liên minh cùng Chani và người Fremen trên hành trình báo thù định mệnh chống lại những kẻ đã hủy diệt gia tộc.",
             "duration_minutes": 166,
             "release_date": date(2024, 3, 1),
             "poster_url": "https://image.tmdb.org/t/p/original/8b8R8l88Qje9dn9OE8PY05Nxl1X.jpg",
@@ -174,9 +174,9 @@ def seed_movies(db):
             "genres": ["Khoa Hoc Vien Tuong", "Hanh Dong"]
         },
         {
-            "title": "Quat Mo Trung Ma (Exhuma)",
+            "title": "Quật Mộ Trùng Ma (Exhuma)",
             "slug": "exhuma-quat-mo-trung-ma",
-            "description": "Hai phap su va thay phong thuy khai quat ngoi mo bi an giai cuu gia toc giau co.",
+            "description": "Hai pháp sư và thầy phong thủy cùng nhau khai quật ngôi mộ bí ẩn nhằm giải cứu một gia tộc giàu có khỏi lời nguyền truyền kiếp.",
             "duration_minutes": 134,
             "release_date": date(2024, 3, 15),
             "poster_url": "https://image.tmdb.org/t/p/original/tMefBSflR6PGQLv7WvFPpKLZkyk.jpg",
@@ -185,9 +185,9 @@ def seed_movies(db):
             "genres": ["Kinh Di"]
         },
         {
-            "title": "Godzilla x Kong: De Che Moi",
+            "title": "Godzilla x Kong: Đế Chế Mới",
             "slug": "godzilla-x-kong-the-new-empire",
-            "description": "Tran chien dinh cao giua Godzilla va Kong chong lai moi de doa an sau trong Trai Dat.",
+            "description": "Trận chiến đỉnh cao giữa hai biểu tượng Godzilla và Kong chống lại mối đe dọa khổng lồ ẩn sâu trong lòng Trái Đất.",
             "duration_minutes": 115,
             "release_date": date(2024, 3, 29),
             "poster_url": "https://images.unsplash.com/photo-1578632767115-351597cf2477?w=800&auto=format&fit=crop&q=80",
@@ -198,7 +198,7 @@ def seed_movies(db):
         {
             "title": "Kung Fu Panda 4",
             "slug": "kung-fu-panda-4",
-            "description": "Po tro thanh Thu linh Tinh than cua Thung lung Binh Yen va tim kiem Than Long Dai Hiep moi.",
+            "description": "Gấu Po trở thành Thủ lĩnh Tinh thần của Thung lũng Bình Yên và bước vào hành trình tìm kiếm một Thần Long Đại Hiệp mới kế vị.",
             "duration_minutes": 94,
             "release_date": date(2024, 3, 8),
             "poster_url": "https://image.tmdb.org/t/p/original/kDp1vUBnMpe8ak4rjgl3cLELqjU.jpg",
@@ -210,7 +210,7 @@ def seed_movies(db):
         {
             "title": "Deadpool & Wolverine",
             "slug": "deadpool-and-wolverine",
-            "description": "Su ket hop lich su va day bung no giua hai di nhan bieu tuong cua Marvel trong chuyen phieu luu da vu tru.",
+            "description": "Sự kết hợp lịch sử và đầy bùng nổ giữa hai dị nhân biểu tượng của Marvel trong chuyến phiêu lưu đa vũ trụ đầy bất ngờ và hài hước.",
             "duration_minutes": 128,
             "release_date": date.today() + timedelta(days=12),
             "poster_url": "https://image.tmdb.org/t/p/original/8cdWjvZQUExUUTzyp4t6EDMubfO.jpg",
@@ -219,9 +219,9 @@ def seed_movies(db):
             "genres": ["Hanh Dong", "Hai Huoc", "Khoa Hoc Vien Tuong"]
         },
         {
-            "title": "Moana 2: Hanh Trinh Bien Ca",
+            "title": "Moana 2: Hành Trình Biển Cả",
             "slug": "moana-2-hanh-trinh-bien-ca",
-            "description": "Moana cung a than Maui buoc vao hanh trinh tham hiem dai duong bao la day hiem nguy va ky vi moi.",
+            "description": "Moana cùng á thần Maui bước vào hành trình thám hiểm đại dương bao la đầy hiểm nguy và kỳ vĩ với những vùng biển chưa từng được khám phá.",
             "duration_minutes": 100,
             "release_date": date.today() + timedelta(days=19),
             "poster_url": "https://image.tmdb.org/t/p/original/yh64qw9mgXBvlaWDi7Q9tpUBAvH.jpg",
@@ -230,9 +230,9 @@ def seed_movies(db):
             "genres": ["Hoat Hinh", "Hai Huoc"]
         },
         {
-            "title": "Vo Si Giac Dau II (Gladiator II)",
+            "title": "Võ Sĩ Giác Đấu II (Gladiator II)",
             "slug": "gladiator-2-vo-si-giac-dau",
-            "description": "Truong thien su thi ruc lua tai dau truong La Ma co dai noi tiep huyen thoai doat giai Oscar nam 2000.",
+            "description": "Trường thiên sử thi rực lửa tại đấu trường La Mã cổ đại nối tiếp huyền thoại điện ảnh từng đoạt giải Oscar danh giá năm 2000.",
             "duration_minutes": 148,
             "release_date": date.today() + timedelta(days=32),
             "poster_url": "https://image.tmdb.org/t/p/original/2cxhvwyEwRlysAmRH4iodkvo0z5.jpg",
@@ -255,6 +255,7 @@ def seed_movies(db):
             print(f"    + Da them phim: {m_info['title']} ({m_info['duration_minutes']} phut) - {m_info['status']}")
         else:
             # Cập nhật thông tin và poster HD mới nhất
+            existing.title = m_info["title"]
             existing.poster_url = m_info["poster_url"]
             existing.status = m_info["status"]
             existing.release_date = m_info["release_date"]

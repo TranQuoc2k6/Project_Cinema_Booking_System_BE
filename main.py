@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from database import SessionLocal
-from app.routers import movies, auth, admin, seats, showtimes, cinemas, rooms, bookings, users, payments, tickets
+from app.routers import movies, auth, admin, seats, showtimes, cinemas, rooms, bookings, users, payments, tickets, reviews
 
 
 async def background_daily_showtime_maintenance():
@@ -91,6 +91,7 @@ app.include_router(bookings.router)
 app.include_router(tickets.router)
 app.include_router(payments.router)
 app.include_router(users.router)
+app.include_router(reviews.router)
 
 @app.get("/", tags=["Root"])
 def home():

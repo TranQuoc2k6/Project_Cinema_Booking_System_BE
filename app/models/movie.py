@@ -26,6 +26,9 @@ class Movie(Base):
     # Mối quan hệ 1-N với Suất chiếu
     showtimes = relationship("Showtime", back_populates="movie", cascade="all, delete-orphan")
 
+    # Mối quan hệ 1-N với Đánh giá phim (Reviews)
+    reviews = relationship("Review", back_populates="movie", cascade="all, delete-orphan")
+
     # Thuộc tính tương thích ngược
     @property
     def duration(self):
