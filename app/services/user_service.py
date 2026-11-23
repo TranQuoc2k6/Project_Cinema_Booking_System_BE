@@ -7,7 +7,7 @@ Cung cấp các chức năng quản lý khách hàng cho Quản trị viên (Adm
 - Xem chi tiết hồ sơ khách hàng và lịch sử đơn vé
 - Khóa hoặc Mở khóa tài khoản (ngăn chặn spam / gian lận vé)
 """
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any
 from datetime import datetime
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session

@@ -5,7 +5,6 @@ from sqlalchemy.orm import Session
 
 from app.models.booking import Booking
 from app.models.movie import Movie
-from app.models.payment import Payment
 from app.models.review import Review
 from app.models.showtime import Showtime
 from app.models.user import User
@@ -14,7 +13,6 @@ from app.schemas.review import (
     ReviewItemResponse,
     ReviewListResponse,
     ReviewSummaryResponse,
-    ReviewUpdate,
 )
 
 

@@ -28,7 +28,6 @@ from app.services.booking_service import clean_expired_holds
 from app.core.pricing import (
     calculate_seat_price,
     get_pricing_breakdown,
-    get_pricing_config,
     get_showtime_surcharges,
 )
 

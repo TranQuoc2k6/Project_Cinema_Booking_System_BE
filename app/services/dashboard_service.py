@@ -4,7 +4,7 @@ Thống kê Doanh thu theo ngày, theo phim, số vé bán, tỷ lệ lấp đ�
 Tối ưu hóa câu truy vấn cho Database Cloud (Aiven MySQL)
 """
 from datetime import datetime, date, timedelta
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, desc, and_
 
@@ -13,9 +13,7 @@ from app.models.booking_seat import BookingSeat
 from app.models.showtime import Showtime
 from app.models.movie import Movie
 from app.models.room import Room
-from app.models.cinema import Cinema
 from app.models.user import User
-from app.models.payment import Payment
 
 
 def get_dashboard_full_stats(db: Session, days: int = 7) -> Dict[str, Any]:
@@ -27,7 +25,6 @@ def get_dashboard_full_stats(db: Session, days: int = 7) -> Dict[str, Any]:
     4. Tỷ lệ lấp đầy theo từng suất chiếu / phòng chiếu (Occupancy Rate)
     5. Đơn đặt vé trực tuyến mới nhất
     """
-    now = datetime.now()
     today_start = datetime.combine(date.today(), datetime.min.time())
     start_date = today_start - timedelta(days=days - 1)
 
@@ -87,9 +84,6 @@ def get_dashboard_full_stats(db: Session, days: int = 7) -> Dict[str, Any]:
     revenue_by_day_dict: Dict[str, Dict[str, Any]] = {}
     day_names = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"]
 
-    # Mẫu phân bổ doanh thu trực quan chuẩn rạp chiếu phim (Cao điểm T6, T7, CN)
-    demo_curve_ratios = [0.08, 0.10, 0.07, 0.11, 0.14, 0.26, 0.24]
-
     for i in range(days):
         dt = (start_date + timedelta(days=i)).date()
         date_str = dt.strftime("%Y-%m-%d")
@@ -116,7 +110,6 @@ def get_dashboard_full_stats(db: Session, days: int = 7) -> Dict[str, Any]:
         .all()
     )
 
-    has_real_bookings = len(bookings_in_range) > 0
     for b in bookings_in_range:
         b_date_str = b.created_at.strftime("%Y-%m-%d")
         if b_date_str in revenue_by_day_dict:

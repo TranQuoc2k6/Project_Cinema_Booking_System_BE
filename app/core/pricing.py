@@ -7,7 +7,7 @@ import json
 import os
 from datetime import datetime, time
 from decimal import Decimal
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 CONFIG_FILE_PATH = os.path.join(os.path.dirname(__file__), "pricing_config.json")
 

@@ -3,7 +3,7 @@ Pydantic Schemas cho Combo bắp nước & Đồ ăn rạp (Task T3C72E6: [Bonus
 """
 from datetime import datetime
 from decimal import Decimal
-from typing import List, Optional
+from typing import Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 

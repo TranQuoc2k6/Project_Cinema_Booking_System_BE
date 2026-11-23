@@ -7,7 +7,7 @@ Cung cấp các API:
   - POST /api/tickets/{booking_id}/cancel : Hủy vé trước giờ chiếu 2 tiếng
 """
 from typing import Optional
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_current_user, get_db

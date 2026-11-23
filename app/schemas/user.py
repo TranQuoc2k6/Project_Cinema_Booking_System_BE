@@ -1,16 +1,15 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from typing import Optional
 from datetime import datetime
 
 
 # Schema trả về thông tin Vai trò
 class RoleResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     name: str
     description: Optional[str] = None
-
-    class Config:
-        from_attributes = True
 
 
 # Schema thông tin cơ bản Người dùng
@@ -47,11 +46,10 @@ class UserStatusUpdate(BaseModel):
 
 # Schema phản hồi thông tin Người dùng (Ẩn password_hash)
 class UserResponse(UserBase):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     role_id: int
     is_active: bool
     created_at: datetime
     role: Optional[RoleResponse] = None
-
-    class Config:
-        from_attributes = True

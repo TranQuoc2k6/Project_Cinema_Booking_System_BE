@@ -16,9 +16,6 @@ from app.models.booking_seat import BookingSeat
 from app.models.seat import Seat
 from app.models.showtime import Showtime
 from app.models.user import User
-from app.models.movie import Movie
-from app.models.room import Room
-from app.models.cinema import Cinema
 from app.models.payment import Payment
 from app.core.pricing import calculate_seat_price
 

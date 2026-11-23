@@ -1,7 +1,7 @@
 """
 Router cho các thao tác liên quan đến Booking, bao gồm API giữ ghế (seat‑hold).
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_current_user, get_db

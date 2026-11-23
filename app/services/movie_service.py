@@ -5,7 +5,6 @@ import unicodedata
 from datetime import date, datetime
 from typing import Optional, List, Dict, Any
 from sqlalchemy.orm import Session
-from sqlalchemy import func
 from fastapi import HTTPException, status, UploadFile
 
 from app.models.movie import Movie
@@ -16,8 +15,6 @@ from app.schemas.movie import (
     MovieUpdate,
     AdminMovieCreate,
     AdminMovieUpdate,
-    AdminMovieResponse,
-    AdminMovieListResponse,
 )
 
 

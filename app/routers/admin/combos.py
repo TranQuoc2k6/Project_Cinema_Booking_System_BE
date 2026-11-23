@@ -1,12 +1,11 @@
 """
 Router quản trị Combo bắp nước dành cho Admin (Task T3C72E6: [Bonus] Combo bắp nước)
 """
-from typing import List, Optional, Dict, Any
+from typing import List, Optional
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from database import get_db
-from app.core.dependencies import require_admin
 from app.schemas.combo import ComboCreate, ComboUpdate, ComboResponse
 from app.services import combo_service
 
