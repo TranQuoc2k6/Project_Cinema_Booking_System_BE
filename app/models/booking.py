@@ -91,3 +91,9 @@ class Booking(Base):
         back_populates="booking",
         cascade="all, delete-orphan",
     )
+    # Combo bắp nước đi kèm đơn vé (Task T3C72E6)
+    booking_combos = relationship(
+        "BookingCombo",
+        back_populates="booking",
+        cascade="all, delete-orphan",
+    )

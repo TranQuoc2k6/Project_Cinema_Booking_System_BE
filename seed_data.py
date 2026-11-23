@@ -505,6 +505,56 @@ def seed_sample_bookings(db):
     print("    [OK] Da seed 5 don ve mau thanh cong!")
 
 
+def seed_combos(db):
+    """8. Seed Combo bắp nước mẫu (Task T3C72E6: [Bonus] Combo bắp nước)"""
+    print("\n--> 9. Dang kiem tra va seed Combo bap nuoc...")
+    from app.models.combo import Combo
+    if db.query(Combo).count() > 0:
+        print("    [i] Da co combo bap nuoc trong database, bo qua seed.")
+        return
+
+    sample_combos = [
+        Combo(
+            name="Combo Solo",
+            description="1 Bắp ngọt lớn (64oz) + 1 Nước ngọt có gas lớn (32oz)",
+            price=Decimal("79000.00"),
+            image_url="https://images.unsplash.com/photo-1572177191856-3cde618dee1f?w=400",
+            is_active=True,
+        ),
+        Combo(
+            name="Combo Couple",
+            description="1 Bắp phô mai đặc biệt (64oz) + 2 Nước ngọt có gas lớn (32oz)",
+            price=Decimal("109000.00"),
+            image_url="https://images.unsplash.com/photo-1585647347483-22b66260dfff?w=400",
+            is_active=True,
+        ),
+        Combo(
+            name="Combo Party",
+            description="2 Bắp caramel giòn rụm + 3 Nước ngọt có gas + 1 Snack khoai tây",
+            price=Decimal("159000.00"),
+            image_url="https://images.unsplash.com/photo-1512149177596-f817c7ef5d4c?w=400",
+            is_active=True,
+        ),
+        Combo(
+            name="Bắp Rang Bơ Truyền Thống",
+            description="Bắp rang bơ thơm lừng, giòn tan cỡ lớn 64oz",
+            price=Decimal("45000.00"),
+            image_url="https://images.unsplash.com/photo-1578849278619-e73505e9610f?w=400",
+            is_active=True,
+        ),
+        Combo(
+            name="Nước Ngọt Có Gas Lớn (32oz)",
+            description="Coca-Cola / Sprite / Fanta mát lạnh sảng khoái",
+            price=Decimal("35000.00"),
+            image_url="https://images.unsplash.com/photo-1622483767028-3f66f32aef97?w=400",
+            is_active=True,
+        ),
+    ]
+    db.add_all(sample_combos)
+    db.commit()
+    print(f"    [OK] Da seed {len(sample_combos)} combo bap nuoc thanh cong!")
+
+
 def main():
     try:
         init_database()
@@ -517,6 +567,7 @@ def main():
             seed_cinemas_and_rooms(db)
             seed_showtimes_7days(db)
             seed_sample_bookings(db)
+            seed_combos(db)
             print("\n==================================================================")
             print("SEED TOAN BO DU LIEU MAU CHO CA NHOM THANH CONG!")
             print("==================================================================")

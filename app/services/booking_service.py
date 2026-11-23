@@ -103,11 +103,18 @@ def clean_expired_holds(db: Session) -> dict:
     }
 
 
-def hold_seats(showtime_id: int, seat_ids: List[int], user_id: int, db: Session) -> Booking:
+def hold_seats(
+    showtime_id: int,
+    seat_ids: List[int],
+    user_id: int,
+    db: Session,
+    combos: Optional[List[Any]] = None,
+) -> Booking:
     """Tạo một Booking tạm thời (status=GIU_CHO) và giữ các ghế.
     - Dọn dẹp các đơn giữ chỗ quá hạn trước.
     - Kiểm tra số ghế ≤ 8.
     - Kiểm tra seat thuộc cùng showtime.
+    - Hỗ trợ chọn mua kèm combo bắp nước (Task T3C72E6).
     - Sử dụng transaction để đảm bảo UNIQUE constraint (`showtime_id`, `seat_id`).
     """
     # 0. Tự động giải phóng các ghế giữ chỗ quá hạn trước khi kiểm tra
@@ -179,6 +186,14 @@ def hold_seats(showtime_id: int, seat_ids: List[int], user_id: int, db: Session)
                 price=seat_price,
             )
             db.add(booking_seat)
+
+        # Lưu các combo bắp nước nếu khách có chọn (Task T3C72E6)
+        if combos:
+            from app.services.combo_service import save_booking_combos
+            combo_total = save_booking_combos(db, booking.id, combos)
+            total_price += combo_total
+            booking.total_price = total_price
+
         db.commit()
     except IntegrityError as e:
         db.rollback()
@@ -203,6 +218,7 @@ def confirm_booking(
     booking_code: Optional[str] = None,
     payment_method: str = "MOMO",
     transaction_id: Optional[str] = None,
+    combos: Optional[List[Any]] = None,
 ) -> dict:
     """
     Xác nhận đặt vé từ ghế đang giữ, tính lại tiền ở server;
@@ -296,6 +312,15 @@ def confirm_booking(
         )
         bs.price = calculated_seat_price
         server_total_price += calculated_seat_price
+
+    # Cộng thêm tiền combo bắp nước nếu có (Task T3C72E6)
+    if combos is not None:
+        from app.services.combo_service import save_booking_combos
+        combos_total = save_booking_combos(db, booking.id, combos)
+        server_total_price += combos_total
+    else:
+        for bc in getattr(booking, "booking_combos", []):
+            server_total_price += Decimal(str(bc.price)) * Decimal(bc.quantity)
 
     # Cập nhật tổng tiền chuẩn xác được tính toán lại tại Server
     booking.total_price = server_total_price
@@ -438,6 +463,18 @@ def format_ticket_response(b: Booking, now: Optional[datetime] = None) -> Dict[s
         "cancel_reason": cancel_reason,
         "is_checked_in": getattr(b, "is_checked_in", False) or False,
         "checked_in_at": getattr(b, "checked_in_at", None),
+        "combos": [
+            {
+                "id": bc.id,
+                "combo_id": bc.combo_id,
+                "name": bc.combo.name if bc.combo else f"Combo #{bc.combo_id}",
+                "quantity": bc.quantity,
+                "price": Decimal(str(bc.price)),
+                "total_price": Decimal(str(bc.price)) * Decimal(bc.quantity),
+                "image_url": bc.combo.image_url if bc.combo else None,
+            }
+            for bc in getattr(b, "booking_combos", [])
+        ],
     }
 
 

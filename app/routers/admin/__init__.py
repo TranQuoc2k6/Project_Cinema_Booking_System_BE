@@ -17,6 +17,7 @@ from .users import router as users_router
 from .movies import router as movies_router
 from .bookings import router as bookings_router
 from .showtimes import router as showtimes_router
+from .combos import router as combos_router
 
 # Master Router dành cho toàn bộ module Admin
 router = APIRouter(
@@ -29,6 +30,7 @@ router.include_router(users_router)
 router.include_router(movies_router)
 router.include_router(bookings_router)
 router.include_router(showtimes_router)
+router.include_router(combos_router)
 
 
 @router.get("/check-admin", summary="Kiểm tra xác thực quyền Quản trị viên (Admin Guard)", include_in_schema=False)
