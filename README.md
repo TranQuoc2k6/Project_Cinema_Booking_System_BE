@@ -80,3 +80,116 @@ Gửi `POST /api/rooms/{room_id}/seats/generate` với số hàng/cột và số
 }
 ```
 Các hàng thường nằm phía trước, tiếp theo là hàng VIP, cuối cùng là hàng ghế đôi. Mỗi cột trong hàng đôi vẫn được tạo thành một ghế `couple`. Sơ đồ có giới hạn 2.000 ghế; API không ghi đè phòng đã có ghế và đồng thời cập nhật `total_seats` của phòng.
+
+
+## Lấy lại mật khẩu cho khách hàng
+
+cd /Users/mac/Documents/Cinema_Booking_System/Project_Cinema_Booking_System_BE
+
+venv/bin/python -c "
+from dotenv import load_dotenv; load_dotenv()
+from database import SessionLocal
+from app.models.user import User
+from app.core.security import hash_password
+
+db = SessionLocal()
+target_email = 'hay123@gmail.com'
+new_pass = '123456'
+
+user = db.query(User).filter(User.email == target_email).first()
+if user:
+    user.password_hash = hash_password(new_pass)
+    db.commit()
+    print(f'-> Đã đổi mật khẩu tài khoản {target_email} thành: {new_pass}')
+else:
+    print('Không tìm thấy tài khoản.')
+db.close()
+"
+
+
+## 📁 Cấu Trúc Thư Mục
+
+Project_Cinema_Booking_System_BE/
+├── main.py                                  # Entry point FastAPI, CORS, lifespan, đăng ký router & /uploads
+├── database.py                              # Kết nối SQLAlchemy (engine, SessionLocal, Base, get_db)
+├── init_db.py                               # Khởi tạo bảng & nạp dữ liệu mẫu
+├── seed_data.py                             # Script Python sinh dữ liệu mẫu (admin, user, rạp, phòng, ghế, phim, lịch chiếu)
+├── seed_data.sql                            # File SQL dữ liệu mẫu
+├── test_seed_result.py                      # Script kiểm tra kết quả sau khi seed
+├── requirements.txt                         # Danh sách thư viện Python phụ thuộc
+├── pytest.ini                               # Cấu hình Pytest
+├── .env                                     # Biến môi trường (DATABASE_URL, SECRET_KEY,...)
+├── README.md                                # Tài liệu hướng dẫn cài đặt & chạy Backend
+├── docs/
+│   ├── ERD_Cinema_Booking_System.png        # Ảnh sơ đồ ERD cơ sở dữ liệu
+│   └── ERD_drawio.xml                       # File nguồn sơ đồ ERD (Draw.io)
+├── migrations/                              # Thư mục migrations (hiện chỉ có .gitkeep)
+├── app/
+│   ├── __init__.py
+│   ├── core/                                # Cấu hình lõi, bảo mật & tính giá
+│   │   ├── config.py                        # Đọc biến môi trường (DB, JWT SECRET_KEY, ALGORITHM, EXPIRE)
+│   │   ├── dependencies.py                  # Dependency xác thực JWT (get_current_user, require_admin)
+│   │   ├── pricing.py                       # Engine tính giá vé theo loại ghế, cuối tuần, giờ vàng
+│   │   ├── pricing_config.json              # Cấu hình hệ số/phụ thu giá vé
+│   │   └── security.py                      # Hash/verify mật khẩu (Bcrypt/SHA-256) & tạo JWT token
+│   ├── models/                              # SQLAlchemy ORM Models (bảng DB)
+│   │   ├── __init__.py
+│   │   ├── role.py                          # Vai trò (ADMIN / USER)
+│   │   ├── user.py                          # Người dùng / Khách hàng
+│   │   ├── genre.py                         # Thể loại phim & bảng liên kết movie_genres
+│   │   ├── movie.py                         # Phim
+│   │   ├── movie_genre.py                   # Bảng trung gian movie_genres
+│   │   ├── cinema.py                        # Cụm rạp
+│   │   ├── room.py                          # Phòng chiếu
+│   │   ├── seat.py                          # Ghế ngồi (standard / vip / couple)
+│   │   ├── showtime.py                      # Suất chiếu
+│   │   ├── booking.py                       # Đơn đặt vé (GIU_CHO / DA_THANH_TOAN / DA_HUY / HET_HAN)
+│   │   ├── booking_seat.py                  # Ghế thuộc đơn đặt vé (chống đặt trùng suất)
+│   │   ├── booking_combo.py                 # Combo bắp nước kèm đơn vé
+│   │   ├── combo.py                         # Danh mục combo bắp nước
+│   │   ├── payment.py                       # Giao dịch thanh toán
+│   │   ├── review.py                        # Đánh giá & bình luận phim
+│   │   └── ticket.py                        # (File trống 0B - placeholder)
+│   ├── schemas/                             # Pydantic Schemas (validate request/response)
+│   │   ├── auth.py, booking.py, cinema.py, combo.py, genre.py, movie.py,
+│   │   │   payment.py, review.py, room.py, seat.py, showtime.py, user.py
+│   │   └── ticket.py                        # (File trống 0B - placeholder)
+│   ├── routers/                             # FastAPI Endpoints
+│   │   ├── auth.py                          # /api/v1/auth (đăng ký, đăng nhập, /me, /admin-check)
+│   │   ├── movies.py                        # API phim công khai & upload poster
+│   │   ├── cinemas.py, rooms.py, seats.py   # API rạp, phòng chiếu & cấu hình sơ đồ ghế
+│   │   ├── showtimes.py                     # API lịch chiếu & sơ đồ ghế theo suất
+│   │   ├── combos.py                        # API combo bắp nước cho khách
+│   │   ├── bookings.py                      # API giữ ghế (/hold), xác nhận, vé của tôi
+│   │   ├── tickets.py                       # API vé điện tử, tra cứu QR, soát vé, hủy vé
+│   │   ├── payments.py                      # API phương thức & thanh toán sandbox
+│   │   ├── reviews.py                       # API đánh giá phim & kiểm tra điều kiện đánh giá
+│   │   ├── users.py                         # API hồ sơ cá nhân & đổi mật khẩu
+│   │   ├── genres.py                        # (File trống 0B - placeholder)
+│   │   └── admin/                           # Nhóm API Quản trị (/api/admin/...)
+│   │       ├── __init__.py                  # Gom router admin & gắn require_admin
+│   │       ├── dashboard.py                 # Thống kê KPI, doanh thu, tỷ lệ lấp đầy
+│   │       ├── movies.py                    # CRUD phim, đổi trạng thái, upload poster
+│   │       ├── showtimes.py                 # CRUD suất chiếu, auto-generate, cleanup
+│   │       ├── bookings.py                  # Quản lý & hủy đơn vé
+│   │       ├── combos.py                    # CRUD combo bắp nước
+│   │       └── users.py                     # Quản lý khách hàng & khóa/mở tài khoản
+│   ├── services/                            # Tầng xử lý nghiệp vụ
+│   │   ├── __init__.py
+│   │   ├── auth_service.py, booking_service.py, combo_service.py,
+│   │   │   dashboard_service.py, movie_service.py, review_service.py,
+│   │   │   seat_service.py, showtime_service.py, user_service.py
+│   │   ├── payment_service.py               # (File trống 0B - placeholder)
+│   │   └── ticket_service.py                # (File trống 0B - placeholder)
+│   ├── uploads/                             # Thư mục tĩnh lưu file upload (/uploads)
+│   │   ├── avatars/                         # (Hiện chỉ có .gitkeep)
+│   │   └── posters/                         # (Hiện chỉ có .gitkeep)
+│   └── utils/                               # (3 file trống 0B: helpers.py, response.py, validators.py)
+└── tests/                                   # 20 file Pytest kiểm thử Backend
+    ├── test_auth.py, test_users_profile.py
+    ├── test_movies.py, test_admin_movies.py, test_movie_reviews.py, test_movie_reviews_direct.py
+    ├── test_cinemas_rooms.py, test_seats.py, test_seat_pricing_and_surcharges.py
+    ├── test_showtimes.py, test_showtime_listing.py, test_admin_showtimes.py
+    ├── test_combos.py, test_booking_hold.py, test_bookings.py
+    ├── test_confirm_booking_and_auto_expire.py, test_payment_sandbox.py
+    └── test_my_tickets_api.py, test_electronic_ticket_and_cancel.py, test_qr_ticket_verification.py
