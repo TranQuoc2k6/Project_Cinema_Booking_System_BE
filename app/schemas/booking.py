@@ -54,6 +54,7 @@ class BookingSeatResponse(BaseModel):
     seat_row:    Optional[str] = None
     seat_column: Optional[int] = None
     seat_type:   Optional[str] = None
+    ticket_code: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -181,6 +182,7 @@ class TicketSeatItem(BaseModel):
     seat_column: Optional[int] = None
     seat_type: Optional[str] = None
     price: Decimal
+    ticket_code: Optional[str] = None
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -272,6 +274,7 @@ class TicketVerifySeatInfo(BaseModel):
     seat_column: Optional[int] = None
     seat_type: Optional[str] = "standard"
     price: Decimal
+    ticket_code: Optional[str] = None
 
 
 class TicketVerifyResponse(BaseModel):
