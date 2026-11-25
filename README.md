@@ -84,6 +84,7 @@ Các hàng thường nằm phía trước, tiếp theo là hàng VIP, cuối cù
 
 ## Lấy lại mật khẩu cho khách hàng
 
+```bash
 cd /Users/mac/Documents/Cinema_Booking_System/Project_Cinema_Booking_System_BE
 
 venv/bin/python -c "
@@ -105,10 +106,14 @@ else:
     print('Không tìm thấy tài khoản.')
 db.close()
 "
+```
 
+
+---
 
 ## 📁 Cấu Trúc Thư Mục
 
+```text
 Project_Cinema_Booking_System_BE/
 ├── main.py                                  # Entry point FastAPI, CORS, lifespan, đăng ký router & /uploads
 ├── database.py                              # Kết nối SQLAlchemy (engine, SessionLocal, Base, get_db)
@@ -193,3 +198,4 @@ Project_Cinema_Booking_System_BE/
     ├── test_combos.py, test_booking_hold.py, test_bookings.py
     ├── test_confirm_booking_and_auto_expire.py, test_payment_sandbox.py
     └── test_my_tickets_api.py, test_electronic_ticket_and_cancel.py, test_qr_ticket_verification.py
+```
