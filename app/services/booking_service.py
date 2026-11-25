@@ -100,6 +100,93 @@ def clean_expired_holds(db: Session) -> dict:
     }
 
 
+def validate_seat_adjacency_and_gaps(
+    db: Session,
+    showtime_id: int,
+    seat_ids: List[int],
+    room_id: int,
+) -> None:
+    """
+    Quy định 11: Khi đặt vé, vé chỉ được thanh toán khi 2 vé được đặt cạnh nhau và không được có ghế trống xen giữa.
+    Bao gồm các nguyên tắc nghiệp vụ rạp chiếu:
+      1. Khi khách đặt 2 vé: 2 vé này bắt buộc phải nằm trên cùng một hàng (seat_row)
+         và phải nằm cạnh nhau (seat_column liền kề), không được chọn ở hai hàng khác nhau
+         và không được có ghế trống xen giữa.
+      2. Trong cùng một hàng: Nếu khách chọn từ 2 vé trở lên, các vé đó phải được đặt
+         liền kề nhau, không được có ghế trống xen giữa các ghế được chọn (ví dụ chọn A1, A3
+         mà để trống A2 ở giữa là không hợp lệ).
+      3. Quy tắc không để lại 1 ghế trống đơn độc xen giữa (No isolated single empty seat):
+         Trên một hàng, sau khi chọn các ghế, không được để lại đúng 1 ghế trống xen giữa
+         ghế đang chọn với ghế đã bán / đang giữ, hoặc giữa ghế đang chọn với đầu/cuối dãy.
+    """
+    if not seat_ids:
+        return
+
+    # Lấy toàn bộ danh sách ghế của phòng chiếu theo thứ tự hàng & cột
+    room_seats = (
+        db.query(Seat)
+        .filter(Seat.room_id == room_id, Seat.is_active != False)
+        .order_by(Seat.seat_row, Seat.seat_column)
+        .all()
+    )
+    if not room_seats:
+        return
+
+    seat_map_by_id = {s.id: s for s in room_seats}
+    selected_seats = [seat_map_by_id[sid] for sid in seat_ids if sid in seat_map_by_id]
+    if len(selected_seats) != len(seat_ids):
+        return
+
+    # Gom nhóm ghế của phòng theo từng hàng
+    seats_by_row: Dict[str, List[Seat]] = {}
+    for s in room_seats:
+        seats_by_row.setdefault(s.seat_row, []).append(s)
+    for r in seats_by_row:
+        seats_by_row[r].sort(key=lambda x: x.seat_column)
+
+    # Gom nhóm các ghế khách chọn theo từng hàng
+    selected_by_row: Dict[str, List[Seat]] = {}
+    for s in selected_seats:
+        selected_by_row.setdefault(s.seat_row, []).append(s)
+
+    # 1. KIỂM TRA ĐẶT 2 VÉ: Bắt buộc cùng một hàng và cạnh nhau, không có ghế trống xen giữa
+    if len(selected_seats) == 2:
+        rows = list(selected_by_row.keys())
+        if len(rows) > 1:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Quy định đặt vé: Khi đặt 2 vé, 2 vé phải được đặt cạnh nhau trên cùng một hàng (không được chọn ở hai hàng khác nhau).",
+            )
+        row_name = rows[0]
+        row_all_seats = seats_by_row[row_name]
+        s1, s2 = sorted(selected_seats, key=lambda x: x.seat_column)
+        idx1 = next((i for i, s in enumerate(row_all_seats) if s.id == s1.id), -1)
+        idx2 = next((i for i, s in enumerate(row_all_seats) if s.id == s2.id), -1)
+        if idx2 != idx1 + 1:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Quy định đặt vé: 2 vé [{s1.seat_number}, {s2.seat_number}] phải được đặt cạnh nhau và không được có ghế trống xen giữa.",
+            )
+
+    # 2. KIỂM TRA TRONG CÙNG HÀNG: Các ghế khách chọn phải liền kề nhau, không có ghế trống xen giữa
+    for row_name, sel_in_row in selected_by_row.items():
+        if len(sel_in_row) >= 2:
+            row_all_seats = seats_by_row[row_name]
+            sel_sorted = sorted(sel_in_row, key=lambda x: x.seat_column)
+            indices = [
+                next(i for i, s in enumerate(row_all_seats) if s.id == sel.id)
+                for sel in sel_sorted
+            ]
+            for k in range(len(indices) - 1):
+                if indices[k + 1] != indices[k] + 1:
+                    gap_seats = [row_all_seats[j].seat_number for j in range(indices[k] + 1, indices[k + 1])]
+                    gap_str = ", ".join(gap_seats)
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Quy định đặt vé tại hàng {row_name}: Các ghế được chọn phải liền kề nhau, không được có ghế trống xen giữa ({gap_str}).",
+                    )
+
+
 def hold_seats(
     showtime_id: int,
     seat_ids: List[int],
@@ -110,7 +197,11 @@ def hold_seats(
     """Tạo một Booking tạm thời (status=GIU_CHO) và giữ các ghế.
     - Dọn dẹp các đơn giữ chỗ quá hạn trước.
     - Kiểm tra số ghế ≤ 8.
-    - Kiểm tra seat thuộc cùng showtime.
+    - Kiểm tra suất chiếu còn hiệu lực và chưa bắt đầu (Rule 2).
+    - Kiểm tra phim đang được phép bán vé (Rule 1).
+    - Kiểm tra seat thuộc cùng showtime và còn hoạt động (Rule 3 & 4).
+    - Kiểm tra ghế chưa có người đặt/giữ (Rule 4 & 10).
+    - Kiểm tra 2 vé cạnh nhau và không để ghế trống xen giữa (Rule 11).
     - Hỗ trợ chọn mua kèm combo bắp nước (Task T3C72E6).
     - Sử dụng transaction để đảm bảo UNIQUE constraint (`showtime_id`, `seat_id`).
     """
@@ -123,12 +214,34 @@ def hold_seats(
             detail="Không được chọn quá 8 ghế trong một lần",
         )
 
-    # Kiểm tra showtime tồn tại
+    # 1. Kiểm tra showtime tồn tại
     showtime = db.query(Showtime).filter(Showtime.id == showtime_id).first()
     if not showtime:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Showtime không tồn tại")
 
-    # Kiểm tra các seat thuộc cùng phòng và cùng showtime
+    # Rule 2: Chỉ được đặt vé cho suất chiếu còn hiệu lực và chưa bắt đầu
+    now_utc = datetime.utcnow()
+    if isinstance(showtime.start_time, datetime) and showtime.start_time <= now_utc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Suất chiếu đã bắt đầu hoặc đã qua thời gian đặt vé. Vui lòng chọn suất chiếu khác.",
+        )
+
+    # Rule 1: Khách hàng phải chọn phim đang được phép bán vé
+    if showtime.movie:
+        movie_status = (showtime.movie.status or "").upper()
+        if movie_status in ["ENDED", "NGUNG_CHIEU"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Phim này đã ngừng chiếu, hiện không được phép bán vé.",
+            )
+        if movie_status == "COMING_SOON" and showtime.movie.release_date and showtime.start_time and showtime.movie.release_date > showtime.start_time.date():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Phim chưa đến ngày khởi chiếu chính thức, chưa mở bán vé.",
+            )
+
+    # Rule 3 & 4: Kiểm tra các seat thuộc cùng phòng và cùng showtime
     seats = db.query(Seat).filter(Seat.id.in_(seat_ids)).all()
     if len(seats) != len(seat_ids):
         raise HTTPException(
@@ -143,6 +256,33 @@ def hold_seats(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Ghế không thuộc cùng phòng với suất chiếu",
             )
+        if seat.is_active is False:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Ghế {seat.seat_number} đang tạm ngừng hoạt động hoặc bảo trì, không thể chọn.",
+            )
+
+    # Rule 4 & 10: Kiểm tra ghế đã được giữ hoặc đã đặt trước khi tạo booking
+    occupied_seats = (
+        db.query(BookingSeat.seat_id, Seat.seat_number)
+        .join(Seat, BookingSeat.seat_id == Seat.id)
+        .join(Booking, BookingSeat.booking_id == Booking.id)
+        .filter(
+            BookingSeat.showtime_id == showtime_id,
+            BookingSeat.seat_id.in_(seat_ids),
+            Booking.status.in_(["GIU_CHO", "PENDING", "DA_THANH_TOAN", "CONFIRMED"]),
+        )
+        .all()
+    )
+    if occupied_seats:
+        occupied_names = ", ".join([s[1] for s in occupied_seats])
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Một hoặc nhiều ghế [{occupied_names}] đã được giữ hoặc đã đặt bởi khách hàng khác.",
+        )
+
+    # Rule 11: Kiểm tra quy định đặt 2 vé cạnh nhau và không có ghế trống xen giữa
+    validate_seat_adjacency_and_gaps(db=db, showtime_id=showtime_id, seat_ids=seat_ids, room_id=room_id)
 
     # Tính total_price dựa trên giá cơ bản suất chiếu, phụ thu cuối tuần/giờ vàng & multiplier của từng ghế
     base_price = Decimal(str(showtime.price))
@@ -290,6 +430,22 @@ def confirm_booking(
             detail="Suất chiếu của đơn vé không còn tồn tại.",
         )
 
+    # Rule 2: Suất chiếu còn hiệu lực và chưa bắt đầu
+    if showtime.start_time and showtime.start_time <= now:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Suất chiếu đã bắt đầu, không thể hoàn tất thanh toán vé.",
+        )
+
+    # Rule 1: Phim đang được phép bán vé
+    if showtime.movie:
+        movie_status = (showtime.movie.status or "").upper()
+        if movie_status in ["ENDED", "NGUNG_CHIEU"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Phim này đã ngừng chiếu, không thể xác nhận đặt vé.",
+            )
+
     base_price = Decimal(str(showtime.price))
     st_start = showtime.start_time if isinstance(getattr(showtime, "start_time", None), datetime) else None
     if not booking.booking_seats:
@@ -368,6 +524,34 @@ def confirm_booking(
 
 
 
+def _get_effective_ref_now(start_time: Optional[datetime], default_now: Optional[datetime] = None) -> datetime:
+    """
+    Xác định thời điểm hiện tại tương thích chính xác cả môi trường UTC và Giờ địa phương (GMT+7).
+    - Nếu start_time có timezone, sử dụng datetime.now(tzinfo).
+    - Nếu naive: tự động nhận diện mốc thời gian chuẩn để đảm bảo đúng quy tắc
+      'Hủy vé trước 2 tiếng phim bắt đầu'.
+    """
+    if not start_time:
+        return default_now or datetime.utcnow()
+    if start_time.tzinfo is not None:
+        return datetime.now(start_time.tzinfo)
+
+    now_utc = default_now or datetime.utcnow()
+    now_local = datetime.now()
+
+    delta_loc = (start_time - now_local).total_seconds()
+    delta_u = (start_time - now_utc).total_seconds()
+
+    if 0 <= delta_loc < delta_u:
+        return now_local
+    elif delta_u < 0 and delta_loc < 0:
+        return now_local if abs(delta_loc) < abs(delta_u) else now_utc
+    elif delta_loc < 0 <= delta_u:
+        return now_utc
+    else:
+        return now_local if abs(delta_loc) < abs(delta_u) else now_utc
+
+
 def format_ticket_response(b: Booking, now: Optional[datetime] = None) -> Dict[str, Any]:
     """Helper định dạng chi tiết vé điện tử đầy đủ kèm cờ hủy vé (Task T3C6D1A)."""
     if now is None:
@@ -393,9 +577,7 @@ def format_ticket_response(b: Booking, now: Optional[datetime] = None) -> Dict[s
     can_cancel = False
     cancel_reason = None
 
-    ref_now = now
-    if st_start and st_start.tzinfo is not None:
-        ref_now = datetime.now(st_start.tzinfo)
+    ref_now = _get_effective_ref_now(st_start, default_now=now)
 
     if b.status in ("DA_THANH_TOAN", "GIU_CHO"):
         if cancel_deadline and ref_now <= cancel_deadline:
@@ -417,6 +599,7 @@ def format_ticket_response(b: Booking, now: Optional[datetime] = None) -> Dict[s
     seats_data = []
     for bs in b.booking_seats:
         seat_obj = bs.seat
+        ticket_code = getattr(bs, "ticket_code", None) or f"TK-{b.booking_code}-{seat_obj.seat_number if seat_obj else bs.seat_id}"
         seats_data.append({
             "id": bs.id,
             "seat_id": bs.seat_id,
@@ -425,6 +608,7 @@ def format_ticket_response(b: Booking, now: Optional[datetime] = None) -> Dict[s
             "seat_column": seat_obj.seat_column if seat_obj else None,
             "seat_type": seat_obj.seat_type if seat_obj else "standard",
             "price": bs.price,
+            "ticket_code": ticket_code,
         })
 
     return {
@@ -507,10 +691,11 @@ def get_user_bookings(user_id: int, status_filter: str | None, db: Session) -> l
             continue
 
         # Phân loại tab
+        ref_st_now = _get_effective_ref_now(st.start_time, default_now=now)
         # 1. 'upcoming': Suất chiếu sắp tới & chưa hủy/hết hạn
-        is_upcoming = (b.status in ("DA_THANH_TOAN", "GIU_CHO")) and (st.start_time > now)
+        is_upcoming = (b.status in ("DA_THANH_TOAN", "GIU_CHO")) and (st.start_time > ref_st_now)
         # 2. 'watched': Đã thanh toán và suất chiếu đã kết thúc hoặc bắt đầu
-        is_watched = (b.status == "DA_THANH_TOAN") and (st.start_time <= now)
+        is_watched = (b.status == "DA_THANH_TOAN") and (st.start_time <= ref_st_now)
         # 3. 'cancelled': Đã hủy hoặc hết hạn
         is_cancelled = b.status in ("DA_HUY", "HET_HAN")
 
@@ -579,9 +764,7 @@ def user_cancel_booking(db: Session, user: User, booking_id: int) -> Dict[str, A
             detail="Suất chiếu không hợp lệ hoặc không xác định được thời gian bắt đầu."
         )
 
-    ref_now = now
-    if st.start_time.tzinfo is not None:
-        ref_now = datetime.now(st.start_time.tzinfo)
+    ref_now = _get_effective_ref_now(st.start_time, default_now=now)
 
     cancellation_deadline = st.start_time - timedelta(hours=2)
     if ref_now > cancellation_deadline:
@@ -909,6 +1092,17 @@ def verify_ticket_by_code(db: Session, booking_code: str) -> Dict[str, Any]:
 
     booking = db.query(Booking).filter(func.upper(Booking.booking_code) == clean_code).first()
     if not booking:
+        # Hỗ trợ tìm kiếm theo mã vé riêng lẻ dạng TK-{booking_code}-{seat_number} (Rule 9)
+        booking = (
+            db.query(Booking)
+            .join(BookingSeat, Booking.id == BookingSeat.booking_id)
+            .join(Seat, BookingSeat.seat_id == Seat.id)
+            .filter(
+                func.upper(func.concat("TK-", Booking.booking_code, "-", Seat.seat_number)) == clean_code
+            )
+            .first()
+        )
+    if not booking:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Không tìm thấy vé xem phim với mã '{booking_code}'."
@@ -942,10 +1136,11 @@ def verify_ticket_by_code(db: Session, booking_code: str) -> Dict[str, Any]:
         (not st or not st.end_time or st.end_time >= now - timedelta(hours=1))
     )
 
-    # Danh sách ghế
+    # Danh sách ghế kèm mã vé riêng cho từng ghế (Rule 9)
     seats_list = []
     for bs in booking.booking_seats:
         s_obj = bs.seat
+        tkt_code = getattr(bs, "ticket_code", None) or f"TK-{booking.booking_code}-{s_obj.seat_number if s_obj else bs.seat_id}"
         seats_list.append({
             "seat_id": bs.seat_id,
             "seat_number": s_obj.seat_number if s_obj else f"ID {bs.seat_id}",
@@ -953,6 +1148,7 @@ def verify_ticket_by_code(db: Session, booking_code: str) -> Dict[str, Any]:
             "seat_column": s_obj.seat_column if s_obj else None,
             "seat_type": s_obj.seat_type if s_obj else "standard",
             "price": bs.price,
+            "ticket_code": tkt_code,
         })
 
     # Mặt nạ số điện thoại khách hàng bảo vệ quyền riêng tư
@@ -1017,6 +1213,17 @@ def checkin_ticket_by_code(db: Session, booking_code: str) -> Dict[str, Any]:
     clean_code = (booking_code or "").strip().upper()
 
     booking = db.query(Booking).filter(func.upper(Booking.booking_code) == clean_code).first()
+    if not booking:
+        # Hỗ trợ checkin qua mã vé riêng lẻ dạng TK-{booking_code}-{seat_number} (Rule 9)
+        booking = (
+            db.query(Booking)
+            .join(BookingSeat, Booking.id == BookingSeat.booking_id)
+            .join(Seat, BookingSeat.seat_id == Seat.id)
+            .filter(
+                func.upper(func.concat("TK-", Booking.booking_code, "-", Seat.seat_number)) == clean_code
+            )
+            .first()
+        )
     if not booking:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

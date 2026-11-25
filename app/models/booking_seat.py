@@ -44,3 +44,10 @@ class BookingSeat(Base):
     booking  = relationship("Booking",  back_populates="booking_seats")
     showtime = relationship("Showtime")
     seat     = relationship("Seat")
+
+    @property
+    def ticket_code(self) -> str:
+        """Mã vé điện tử riêng biệt cho từng ghế (Rule 9)."""
+        seat_num = self.seat.seat_number if self.seat else f"S{self.seat_id}"
+        code = self.booking.booking_code if self.booking else f"BK{self.booking_id}"
+        return f"TK-{code}-{seat_num}"
